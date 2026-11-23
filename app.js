@@ -70,15 +70,6 @@ function setExportLog(msg, pct = null) {
 /* ============================================================
    Patch EBML / WebM Duration so players display exact length instead of 0:00
    ============================================================ */
-function findFloat64Offset(bytes) {
-  for (let i = 0; i < bytes.length - 11; i++) {
-    if (bytes[i] === 0x44 && bytes[i + 1] === 0x89 && bytes[i + 2] === 0x88) {
-      return i + 3;
-    }
-  }
-  return -1;
-}
-
 function fixWebmBlobDuration(blob, durationSec) {
   return blob.arrayBuffer().then((buf) => {
     const bytes = new Uint8Array(buf);
@@ -144,6 +135,160 @@ function fixWebmBlobDuration(blob, durationSec) {
 
     return new Blob([bytes], { type: blob.type || "video/webm" });
   }).catch(() => blob);
+}
+
+/* ============================================================
+   RIFF / AVI MJPEG container builder from captured JPEG frames
+   ============================================================ */
+function buildAviFromJpegFrames(frames, width, height, fps) {
+  const safeFps = Math.max(1, Math.min(60, Number(fps) || 30));
+  const useSecPerFrame = Math.round(1000000 / safeFps);
+
+  const writeStr = (arr, offset, str) => {
+    for (let i = 0; i < str.length; i++) arr[offset + i] = str.charCodeAt(i);
+  };
+  const writeU32 = (view, offset, val) => {
+    view.setUint32(offset, val >>> 0, true);
+  };
+
+  const moviParts = [];
+  const indexEntries = [];
+  let moviDataSize = 0;
+
+  for (let i = 0; i < frames.length; i++) {
+    const jpg = frames[i];
+    const pad = jpg.length % 2 === 1 ? 1 : 0;
+    const chunkSize = 8 + jpg.length + pad;
+    const chunk = new Uint8Array(chunkSize);
+    writeStr(chunk, 0, "00db");
+    new DataView(chunk.buffer).setUint32(4, jpg.length, true);
+    chunk.set(jpg, 8);
+    moviParts.push(chunk);
+
+    indexEntries.push({
+      chunkId: "00db",
+      flags: 0x10,
+      offset: moviDataSize,
+      size: jpg.length
+    });
+    moviDataSize += chunkSize;
+  }
+
+  const moviListSize = 4 + moviDataSize;
+  const idx1DataSize = indexEntries.length * 16;
+  const idx1TotalSize = 8 + idx1DataSize;
+
+  const avihData = new Uint8Array(56);
+  const avihView = new DataView(avihData.buffer);
+  writeU32(avihView, 0, useSecPerFrame);
+  writeU32(avihView, 4, width * height * 3);
+  writeU32(avihView, 8, 0);
+  writeU32(avihView, 12, 0x10);
+  writeU32(avihView, 16, frames.length);
+  writeU32(avihView, 20, 0);
+  writeU32(avihView, 24, 1);
+  writeU32(avihView, 28, width * height * 3);
+  writeU32(avihView, 32, width);
+  writeU32(avihView, 36, height);
+
+  const strhData = new Uint8Array(56);
+  const strhView = new DataView(strhData.buffer);
+  writeStr(strhData, 0, "vids");
+  writeStr(strhData, 4, "MJPG");
+  writeU32(strhView, 20, 1);
+  writeU32(strhView, 24, safeFps);
+  writeU32(strhView, 32, frames.length);
+  writeU32(strhView, 36, width * height * 3);
+  writeU32(strhView, 40, 10000);
+
+  const strfData = new Uint8Array(40);
+  const strfView = new DataView(strfData.buffer);
+  writeU32(strfView, 0, 40);
+  writeU32(strfView, 4, width);
+  writeU32(strfView, 8, height);
+  strfView.setUint16(12, 1, true);
+  strfView.setUint16(14, 24, true);
+  writeStr(strfData, 16, "MJPG");
+  writeU32(strfView, 20, width * height * 3);
+
+  const strlDataSize = (8 + 56) + (8 + 40);
+  const strlListSize = 4 + strlDataSize;
+  const hdrlDataSize = (8 + 56) + (8 + strlListSize);
+  const hdrlListSize = 4 + hdrlDataSize;
+
+  const riffPayloadSize = 4 + (8 + hdrlListSize) + (8 + moviListSize) + idx1TotalSize;
+  const out = new Uint8Array(8 + riffPayloadSize);
+  const view = new DataView(out.buffer);
+
+  let pos = 0;
+  writeStr(out, pos, "RIFF"); writeU32(view, pos + 4, riffPayloadSize); pos += 8;
+  writeStr(out, pos, "AVI "); pos += 4;
+
+  writeStr(out, pos, "LIST"); writeU32(view, pos + 4, hdrlListSize); pos += 8;
+  writeStr(out, pos, "hdrl"); pos += 4;
+
+  writeStr(out, pos, "avih"); writeU32(view, pos + 4, 56); out.set(avihData, pos + 8); pos += 64;
+
+  writeStr(out, pos, "LIST"); writeU32(view, pos + 4, strlListSize); pos += 8;
+  writeStr(out, pos, "strl"); pos += 4;
+  writeStr(out, pos, "strh"); writeU32(view, pos + 4, 56); out.set(strhData, pos + 8); pos += 64;
+  writeStr(out, pos, "strf"); writeU32(view, pos + 4, 40); out.set(strfData, pos + 8); pos += 48;
+
+  writeStr(out, pos, "LIST"); writeU32(view, pos + 4, moviListSize); pos += 8;
+  writeStr(out, pos, "movi"); pos += 4;
+  for (const part of moviParts) {
+    out.set(part, pos);
+    pos += part.length;
+  }
+
+  writeStr(out, pos, "idx1"); writeU32(view, pos + 4, idx1DataSize); pos += 8;
+  for (const entry of indexEntries) {
+    writeStr(out, pos, entry.chunkId);
+    writeU32(view, pos + 4, entry.flags);
+    writeU32(view, pos + 8, entry.offset);
+    writeU32(view, pos + 12, entry.size);
+    pos += 16;
+  }
+
+  return new Blob([out], { type: "video/avi" });
+}
+
+/* ============================================================
+   Capture thumbnail data URL at a specific timestamp
+   ============================================================ */
+async function captureThumbnailAt(timeSec) {
+  const videoEl = $("videoEl");
+  if (!videoEl || !videoEl.src) return null;
+  const prevTime = videoEl.currentTime || 0;
+  const wasPaused = videoEl.paused;
+  try {
+    videoEl.pause();
+    const maxDur = resolveVideoDuration(videoEl);
+    const target = clamp(Number(timeSec) || 0, 0, Math.max(0, maxDur - 0.1));
+    videoEl.currentTime = target;
+    await new Promise((resolve) => {
+      if (Math.abs(videoEl.currentTime - target) < 0.2 && videoEl.readyState >= 2) return resolve();
+      const onSeek = () => {
+        videoEl.removeEventListener("seeked", onSeek);
+        resolve();
+      };
+      videoEl.addEventListener("seeked", onSeek);
+      setTimeout(() => {
+        videoEl.removeEventListener("seeked", onSeek);
+        resolve();
+      }, 900);
+    });
+    const thumbCanvas = document.createElement("canvas");
+    thumbCanvas.width = 270;
+    thumbCanvas.height = 480;
+    drawFrameToCanvas(videoEl, thumbCanvas, target, false);
+    return thumbCanvas.toDataURL("image/jpeg", 0.78);
+  } catch (e) {
+    return null;
+  } finally {
+    videoEl.currentTime = prevTime;
+    if (!wasPaused) videoEl.play().catch(() => {});
+  }
 }
 
 function applyStyleToTarget(target, preset) {
@@ -224,12 +369,7 @@ function initStyleControls() {
     $("hookText").value = state.hook.text;
     $("hookText").oninput = e => {
       state.hook.text = e.target.value;
-      // Automatically activate hook when user types non-empty text
-      if (state.hook.text.trim().length > 0) {
-        state.hook.enabled = true;
-      } else {
-        state.hook.enabled = false;
-      }
+      state.hook.enabled = state.hook.text.trim().length > 0;
       syncHookToggleLabel();
     };
   }
@@ -300,6 +440,7 @@ function initCollapsibleCards() {
 }
 
 function resolveVideoDuration(videoEl) {
+  if (!videoEl) return state.duration || 60;
   if (Number.isFinite(videoEl.duration) && videoEl.duration > 0) {
     return videoEl.duration;
   }
@@ -686,7 +827,8 @@ async function analyzeMoments() {
       score,
       viral_title: VIRAL_TITLES[candidates.length % VIRAL_TITLES.length],
       hashtags: VIRAL_HASHTAGS[candidates.length % VIRAL_HASHTAGS.length].split(" "),
-      signals: { audio_peak: audioPeak, motion, intensity }
+      signals: { audio_peak: audioPeak, motion, intensity },
+      thumb: null
     });
   }
 
@@ -695,6 +837,11 @@ async function analyzeMoments() {
   const topClips = [...candidates]
     .sort((a, b) => b.score - a.score)
     .slice(0, 6);
+
+  for (let i = 0; i < topClips.length; i++) {
+    topClips[i].idx = i + 1;
+    topClips[i].thumb = await captureThumbnailAt(topClips[i].start + 1);
+  }
 
   state.clips = topClips;
   renderClipList();
@@ -713,9 +860,6 @@ function selectClip(clip) {
   updateTimeline();
 }
 
-/* ============================================================
-   Vertical 9:16 Live Preview Modal for a selected clip
-   ============================================================ */
 function openClipPreviewModal(clip) {
   const existing = document.getElementById("clipPreviewModal");
   if (existing) existing.remove();
@@ -785,15 +929,26 @@ function openClipPreviewModal(clip) {
   };
 }
 
+function getSelectedExportFormatInfo() {
+  const mode = $("expMode")?.value || "fast";
+  const tierKey = $("expTier")?.value || "720p30";
+  const isAvi = mode === "avi";
+  const is60 = tierKey.endsWith("60");
+  const fps = is60 ? 60 : 30;
+  const ext = isAvi ? "avi" : "webm";
+  return { mode, tierKey, isAvi, fps, ext };
+}
+
 async function exportAndDownloadClip(clip) {
   if (typeof window.authorizeClipDownload === "function") {
     const allowed = await window.authorizeClipDownload(clip, 1);
     if (!allowed) return;
   }
+  const { ext } = getSelectedExportFormatInfo();
   await exportVerticalCut({
     startOverride: clip.start,
     endOverride: clip.end,
-    fileName: `clipfactory_corte_${clip.idx}_${Math.round(clip.start)}s_${Math.round(clip.end)}s.webm`
+    fileName: `clipfactory_corte_${clip.idx}_${Math.round(clip.start)}s_${Math.round(clip.end)}s.${ext}`
   });
 }
 
@@ -807,8 +962,12 @@ function renderClipList() {
 
   list.innerHTML = state.clips.map((c, i) => {
     const color = c.score >= 70 ? "var(--good)" : c.score >= 45 ? "var(--warn)" : "var(--bad)";
+    const thumbHtml = c.thumb
+      ? `<img src="${c.thumb}" alt="Miniatura clipe ${c.idx}" style="width:46px;height:82px;object-fit:cover;border-radius:8px;border:1px solid var(--border);flex:none">`
+      : "";
     return `
       <div class="clipItem" data-clip-idx="${i}">
+        ${thumbHtml}
         <div class="score" style="border-color:${color}">${c.score}<small>NOTA</small></div>
         <div class="info">
           <b>${fmt(c.start)} → ${fmt(c.end)}</b> (${Math.round(c.end - c.start)}s)
@@ -845,11 +1004,12 @@ function renderClipList() {
         const ok = await window.authorizeClipDownload(state.clips[0], state.clips.length);
         if (!ok) return;
       }
+      const { ext } = getSelectedExportFormatInfo();
       for (const c of state.clips) {
         await exportVerticalCut({
           startOverride: c.start,
           endOverride: c.end,
-          fileName: `clipfactory_corte_${c.idx}.webm`
+          fileName: `clipfactory_corte_${c.idx}.${ext}`
         });
       }
     };
@@ -1122,12 +1282,10 @@ function drawFrameToCanvas(videoEl, canvas, nowSec, showSplitGuide = false) {
     }
   }
 
-  // Hook only renders when explicitly enabled AND text is non-empty
   if (state.hook.enabled && state.hook.text && state.hook.text.trim()) {
     drawStyledText(ctx, state.hook.text, state.hook.x, state.hook.y, +($("hookSz")?.value) || 64, state.hook, nowSec);
   }
 
-  // Captions only render when a caption cue has non-empty text
   const activeCue = getActiveCaption(videoEl.currentTime || 0);
   if (activeCue && activeCue.text && activeCue.text.trim()) {
     drawStyledText(ctx, activeCue.text, state.capStyle.x, state.capStyle.y, +($("fontSz")?.value) || 48, state.capStyle, nowSec);
@@ -1194,10 +1352,10 @@ function startPreviewLoop() {
 
 const TIER_MAP = {
   "1080p30": { w: 1080, h: 1920, fps: 30, bps: 3200000 },
-  "1080p60": { w: 1080, h: 1920, fps: 30, bps: 3500000 },
-  "720p30":  { w: 720,  h: 1280, fps: 24, bps: 1800000 },
-  "720p60":  { w: 720,  h: 1280, fps: 30, bps: 2200000 },
-  "1440p60": { w: 1080, h: 1920, fps: 30, bps: 3800000 }
+  "1080p60": { w: 1080, h: 1920, fps: 60, bps: 4500000 },
+  "720p30":  { w: 720,  h: 1280, fps: 30, bps: 2000000 },
+  "720p60":  { w: 720,  h: 1280, fps: 60, bps: 3200000 },
+  "1440p60": { w: 1080, h: 1920, fps: 60, bps: 4800000 }
 };
 
 async function exportVerticalCut(opts = {}) {
@@ -1210,14 +1368,14 @@ async function exportVerticalCut(opts = {}) {
 
   applyLoadedDuration(videoEl);
 
-  const tierKey = $("expTier")?.value || "720p30";
-  let spec = { ...(TIER_MAP[tierKey] || TIER_MAP["720p30"]) };
+  const fmtInfo = getSelectedExportFormatInfo();
+  let spec = { ...(TIER_MAP[fmtInfo.tierKey] || TIER_MAP["720p30"]) };
+  spec.fps = fmtInfo.fps;
 
   if (isMobileDevice()) {
     spec.w = Math.min(spec.w, 720);
     spec.h = Math.min(spec.h, 1280);
-    spec.fps = Math.min(spec.fps, 24);
-    spec.bps = Math.min(spec.bps, 1600000);
+    spec.bps = Math.min(spec.bps, 2500000);
   }
 
   const maxDur = resolveVideoDuration(videoEl);
@@ -1239,7 +1397,7 @@ async function exportVerticalCut(opts = {}) {
   if (btn) btn.disabled = true;
   state.isExporting = true;
   if ($("expResult")) $("expResult").innerHTML = "";
-  setExportLog(`Preparando áudio e vídeo (${spec.w}×${spec.h} · ${spec.fps} fps)...`, 8);
+  setExportLog(`Preparando ${fmtInfo.ext.toUpperCase()} (${spec.w}×${spec.h} · ${spec.fps} fps)...`, 8);
 
   let videoStream = null;
   let audioCtx = null;
@@ -1247,6 +1405,7 @@ async function exportVerticalCut(opts = {}) {
   let audioDest = null;
   let combinedStream = null;
   let recorder = null;
+  const aviFrames = [];
 
   try {
     videoStream = offCanvas.captureStream(spec.fps);
@@ -1319,84 +1478,124 @@ async function exportVerticalCut(opts = {}) {
       }, 1500);
     });
 
-    recorder.start(250);
+    recorder.start(200);
     await videoEl.play().catch(() => {});
 
     let lastUiUpdate = 0;
+    let lastAviFrameMs = 0;
+    const aviFrameIntervalMs = 1000 / spec.fps;
+
     const stepFrame = () => {
       if (videoEl.paused || videoEl.ended || videoEl.currentTime >= endSec) return;
       drawFrameToCanvas(videoEl, offCanvas, videoEl.currentTime, false);
+
       const nowMs = performance.now();
+      if (fmtInfo.isAvi && (nowMs - lastAviFrameMs >= aviFrameIntervalMs * 0.85)) {
+        lastAviFrameMs = nowMs;
+        const dataUrl = offCanvas.toDataURL("image/jpeg", 0.82);
+        const b64 = dataUrl.split(",")[1];
+        if (b64) {
+          const bin = atob(b64);
+          const bytes = new Uint8Array(bin.length);
+          for (let i = 0; i < bin.length; i++) bytes[i] = bin.charCodeAt(i);
+          aviFrames.push(bytes);
+        }
+      }
+
       if (nowMs - lastUiUpdate > 160) {
         lastUiUpdate = nowMs;
         const pct = 10 + clamp(((videoEl.currentTime - startSec) / actualDurationSec) * 82, 0, 82);
-        setExportLog(`Renderizando ${fmt(videoEl.currentTime)} / ${fmt(endSec)}...`, pct);
+        setExportLog(`Renderizando ${fmtInfo.ext.toUpperCase()} ${spec.fps}fps · ${fmt(videoEl.currentTime)} / ${fmt(endSec)}...`, pct);
       }
     };
 
-    if (typeof videoEl.requestVideoFrameCallback === "function") {
-      await new Promise((resolve) => {
-        let finished = false;
-        const finish = () => {
-          if (finished) return;
-          finished = true;
-          resolve();
-        };
-        const onFrame = () => {
-          if (finished || videoEl.paused || videoEl.ended || videoEl.currentTime >= endSec) {
-            finish();
-            return;
-          }
-          stepFrame();
-          videoEl.requestVideoFrameCallback(onFrame);
-        };
-        videoEl.requestVideoFrameCallback(onFrame);
-        videoEl.addEventListener("ended", finish, { once: true });
-        setTimeout(finish, Math.ceil((actualDurationSec + 2) * 1000));
-      });
-    } else {
-      await new Promise((resolve) => {
-        let finished = false;
-        const finish = () => {
-          if (finished) return;
-          finished = true;
-          resolve();
-        };
-        const tick = () => {
-          if (finished || videoEl.paused || videoEl.ended || videoEl.currentTime >= endSec) {
-            finish();
-            return;
-          }
-          stepFrame();
-          requestAnimationFrame(tick);
-        };
-        requestAnimationFrame(tick);
-        videoEl.addEventListener("ended", finish, { once: true });
-        setTimeout(finish, Math.ceil((actualDurationSec + 2) * 1000));
-      });
-    }
+    await new Promise((resolve) => {
+      let finished = false;
+      let rafToken = 0;
+      let rvfcId = 0;
+
+      const finish = () => {
+        if (finished) return;
+        finished = true;
+        if (rafToken) cancelAnimationFrame(rafToken);
+        if (rvfcId && typeof videoEl.cancelVideoFrameCallback === "function") {
+          try { videoEl.cancelVideoFrameCallback(rvfcId); } catch (e) {}
+        }
+        resolve();
+      };
+
+      const onFrame = () => {
+        if (finished || videoEl.paused || videoEl.ended || videoEl.currentTime >= endSec) {
+          finish();
+          return;
+        }
+        stepFrame();
+        if (typeof videoEl.requestVideoFrameCallback === "function") {
+          rvfcId = videoEl.requestVideoFrameCallback(onFrame);
+        } else {
+          rafToken = requestAnimationFrame(onFrame);
+        }
+      };
+
+      stepFrame();
+      if (typeof videoEl.requestVideoFrameCallback === "function") {
+        rvfcId = videoEl.requestVideoFrameCallback(onFrame);
+      } else {
+        rafToken = requestAnimationFrame(onFrame);
+      }
+
+      videoEl.addEventListener("ended", finish, { once: true });
+      setTimeout(finish, Math.ceil((actualDurationSec + 1.5) * 1000));
+    });
 
     videoEl.pause();
-    if (recorder.state !== "inactive") recorder.stop();
+    if (recorder.state !== "inactive") {
+      try { recorder.requestData(); } catch (e) {}
+      recorder.stop();
+    }
     const rawBlob = await donePromise;
     chunks.length = 0;
 
-    try { audioSource?.disconnect(); } catch (e) {}
+    const thumbDataUrl = await captureThumbnailAt(startSec + Math.min(0.8, actualDurationSec * 0.25));
+
+    try { audioSource?.disconnect(audioDest); } catch (e) {}
     try { audioDest?.disconnect(); } catch (e) {}
-    
+
     try { combinedStream?.getTracks().forEach(t => t.stop()); } catch (e) {}
     try { videoStream?.getTracks().forEach(t => t.stop()); } catch (e) {}
+
+    let finalBlob = await fixWebmBlobDuration(rawBlob, actualDurationSec);
+    let outName = opts.fileName || `clipfactory_corte_${spec.w}x${spec.h}_${spec.fps}fps.${fmtInfo.ext}`;
+
+    if (fmtInfo.isAvi) {
+      if (!aviFrames.length) {
+        const fallbackUrl = offCanvas.toDataURL("image/jpeg", 0.85);
+        const b64 = fallbackUrl.split(",")[1] || "";
+        const bin = atob(b64);
+        const bytes = new Uint8Array(bin.length);
+        for (let i = 0; i < bin.length; i++) bytes[i] = bin.charCodeAt(i);
+        aviFrames.push(bytes);
+      }
+      finalBlob = buildAviFromJpegFrames(aviFrames, spec.w, spec.h, spec.fps);
+      if (!outName.toLowerCase().endsWith(".avi")) {
+        outName = outName.replace(/\.[^.]+$/, "") + ".avi";
+      }
+    }
+
     offCanvas.width = 1;
     offCanvas.height = 1;
 
-    // Patch EBML duration metadata so 0:00 bug is fixed in players
-    const fixedBlob = await fixWebmBlobDuration(rawBlob, actualDurationSec);
-
-    const url = URL.createObjectURL(fixedBlob);
-    const outName = opts.fileName || `clipfactory_corte_${spec.w}x${spec.h}.webm`;
-    setExportLog(`Corte exportado (${fmt(actualDurationSec)}) pronto para reproduzir!`, 100);
+    const url = URL.createObjectURL(finalBlob);
+    setExportLog(`Corte ${fmtInfo.ext.toUpperCase()} (${spec.fps} fps · ${fmt(actualDurationSec)}) pronto!`, 100);
     if ($("expResult")) {
-      $("expResult").innerHTML = `<a class="dl" href="${url}" download="${outName}">⬇ Baixar corte (${fmt(actualDurationSec)})</a>`;
+      const thumbImg = thumbDataUrl
+        ? `<img src="${thumbDataUrl}" alt="Miniatura do corte" style="width:54px;height:96px;object-fit:cover;border-radius:8px;border:1px solid var(--border2);margin-right:10px;vertical-align:middle">`
+        : "";
+      $("expResult").innerHTML = `
+        <div style="display:flex;align-items:center;margin-top:10px">
+          ${thumbImg}
+          <a class="dl" style="margin-top:0" href="${url}" download="${outName}">⬇ Baixar ${fmtInfo.ext.toUpperCase()} ${spec.fps}fps (${fmt(actualDurationSec)})</a>
+        </div>`;
     }
     const a = document.createElement("a");
     a.href = url;
@@ -1408,7 +1607,6 @@ async function exportVerticalCut(opts = {}) {
     if (recorder && recorder.state !== "inactive") {
       try { recorder.stop(); } catch (e) {}
     }
-    
     try { combinedStream?.getTracks().forEach(t => t.stop()); } catch (e) {}
     try { videoStream?.getTracks().forEach(t => t.stop()); } catch (e) {}
     setExportLog("Falha na exportação: " + err.message, 0);

@@ -1,5 +1,5 @@
 -- ============================================================
--- ClipFactory / WaveCombat Hub — Tabelas e Políticas RLS (v0.004)
+-- ClipFactory / WaveCombat Hub — Tabelas e Políticas RLS (v0.010)
 -- Execute este script no SQL Editor do Supabase
 -- ============================================================
 
@@ -15,7 +15,6 @@ create table if not exists public.assinaturas (
 );
 
 -- 2. Tabela de créditos avulsos de download por conta
--- Permite comprar 5, 10, 30 (3x10) ou adicionar créditos avulsos mesmo tendo pacote semanal
 create table if not exists public.creditos_videos (
   id_jogador text primary key,
   videos_restantes integer not null default 0,

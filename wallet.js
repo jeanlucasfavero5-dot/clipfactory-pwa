@@ -1,6 +1,6 @@
 /* ============================================================
    Integração Hub WaveCombat — Supabase (assinaturas + creditos_videos + carteira_diamantes)
-   v0.005: Assinatura semanal (7 dias) com cota diária de 20 clipes + desconto real no download
+   v0.011: Desconto garantido na carteira de vídeos no download + normalização de dia_uso
    ============================================================ */
 "use strict";
 
@@ -15,6 +15,11 @@ const PLANOS = {
 
 function todayIsoDate() {
   return new Date().toISOString().slice(0, 10);
+}
+
+function normalizeIsoDate(val) {
+  if (!val) return "";
+  return String(val).trim().slice(0, 10);
 }
 
 function resolveInitialPlayerId() {
@@ -59,7 +64,8 @@ function getSupabase() {
 function getAvailableVideosSummary() {
   const hasWeekly = !!(HUB.sub && HUB.sub.ativa);
   const dailyLimit = Number(HUB.sub?.limite_diario || 20);
-  const usedToday = Number(HUB.sub?.clipes_hoje || 0);
+  const todayStr = todayIsoDate();
+  const usedToday = normalizeIsoDate(HUB.sub?.dia_uso) === todayStr ? Number(HUB.sub?.clipes_hoje || 0) : 0;
   const dailyRemaining = hasWeekly ? Math.max(0, dailyLimit - usedToday) : 0;
 
   const extraRemaining = Math.max(0, Number(HUB.extraCredits?.videos_restantes || 0));
@@ -216,7 +222,7 @@ async function consumeOneVideoCreditForDownload() {
   const todayStr = todayIsoDate();
   const hasWeekly = !!(HUB.sub && HUB.sub.ativa);
   const dailyLimit = Number(HUB.sub?.limite_diario || 20);
-  let usedToday = (HUB.sub?.dia_uso === todayStr) ? Number(HUB.sub?.clipes_hoje || 0) : 0;
+  let usedToday = normalizeIsoDate(HUB.sub?.dia_uso) === todayStr ? Number(HUB.sub?.clipes_hoje || 0) : 0;
 
   if (hasWeekly && usedToday < dailyLimit) {
     usedToday += 1;
@@ -240,7 +246,6 @@ async function consumeOneVideoCreditForDownload() {
 
     const remToday = Math.max(0, dailyLimit - usedToday);
     renderWalletBar(`🎬 1 vídeo descontado da cota diária (${remToday}/${dailyLimit} restantes hoje)`, "ok");
-    await refreshPremiumPanel();
     return true;
   }
 
@@ -255,7 +260,6 @@ async function consumeOneVideoCreditForDownload() {
         .eq("id_jogador", HUB.playerId);
     }
     renderWalletBar(`🎬 1 vídeo avulso descontado (${nextRem}/${Math.max(nextRem, HUB.extraCredits.videos_comprados_total)} restantes)`, "ok");
-    await refreshPremiumPanel();
     return true;
   }
 
@@ -265,11 +269,17 @@ async function consumeOneVideoCreditForDownload() {
 window.authorizeClipDownload = async function(clip, count = 1) {
   if (!HUB.playerId) return true;
   try {
-    // Refresh latest subscription & credits before deducting
-    HUB.sub = await fetchSubscriptionFromSupabase();
+    const freshSub = await fetchSubscriptionFromSupabase();
+    const todayStr = todayIsoDate();
+    if (HUB.sub && HUB.sub.ativa && freshSub.ativa && normalizeIsoDate(HUB.sub.dia_uso) === todayStr) {
+      HUB.sub.clipes_hoje = Math.max(Number(HUB.sub.clipes_hoje || 0), Number(freshSub.clipes_hoje || 0));
+      HUB.sub.dia_uso = todayStr;
+    } else {
+      HUB.sub = freshSub;
+    }
     await loadExtraCredits();
 
-    let remainingNeeded = count;
+    let remainingNeeded = Math.max(1, Number(count) || 1);
     while (remainingNeeded > 0) {
       const usedQuotaOrCredit = await consumeOneVideoCreditForDownload();
       if (!usedQuotaOrCredit) {
@@ -303,7 +313,8 @@ async function fetchSubscriptionFromSupabase() {
   const fimMs = data.fim ? new Date(data.fim).getTime() : 0;
   const ativa = fimMs > now;
   const todayStr = todayIsoDate();
-  const clipesHoje = (data.dia_uso === todayStr) ? Number(data.clipes_hoje || 0) : 0;
+  const rowDay = normalizeIsoDate(data.dia_uso);
+  const clipesHoje = (rowDay === todayStr) ? Number(data.clipes_hoje || 0) : 0;
 
   return {
     ativa,
@@ -334,6 +345,9 @@ async function refreshPremiumPanel() {
   if (!body || !HUB.playerId) return;
   try {
     const s = await fetchSubscriptionFromSupabase();
+    if (HUB.sub && normalizeIsoDate(HUB.sub.dia_uso) === todayIsoDate()) {
+      s.clipes_hoje = Math.max(Number(s.clipes_hoje || 0), Number(HUB.sub.clipes_hoje || 0));
+    }
     HUB.sub = s;
     const vids = getAvailableVideosSummary();
 
@@ -462,7 +476,7 @@ async function subscribeWeekly() {
       inicio: now.toISOString(),
       fim: newFim.toISOString(),
       limite_diario: 20,
-      clipes_hoje: HUB.sub?.dia_uso === todayStr ? (HUB.sub?.clipes_hoje || 0) : 0,
+      clipes_hoje: normalizeIsoDate(HUB.sub?.dia_uso) === todayStr ? (HUB.sub?.clipes_hoje || 0) : 0,
       dia_uso: todayStr,
       updated_at: now.toISOString()
     };

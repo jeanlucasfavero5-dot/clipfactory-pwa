@@ -1,5 +1,5 @@
 -- ============================================================
--- ClipFactory / WaveCombat Hub — Tabelas, RLS e RPC Atômica (v0.017)
+-- ClipFactory / WaveCombat Hub — Tabelas, RLS e RPC Atômica (v0.018)
 -- Execute este script no SQL Editor do Supabase
 -- ============================================================
 
@@ -51,7 +51,6 @@ create policy "carteira_diamantes_select_all" on public.carteira_diamantes for s
 create policy "carteira_diamantes_insert_all" on public.carteira_diamantes for insert with check (true);
 create policy "carteira_diamantes_update_all" on public.carteira_diamantes for update using (true) with check (true);
 
--- Função atômica para descontar 1 vídeo disponível (prioriza cota diária da assinatura, depois avulso)
 create or replace function public.consumir_video_download(p_id_jogador text)
 returns jsonb
 language plpgsql
@@ -116,7 +115,6 @@ begin
 end;
 $$;
 
--- Função de estorno automático caso o download falhe após o desconto
 create or replace function public.estornar_video_download(p_id_jogador text, p_origem text)
 returns void
 language plpgsql

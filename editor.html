@@ -126,17 +126,10 @@ label{font-size:12px;color:#b7dec7;font-weight:700;display:block;margin:8px 0 4p
 .presetItem .pv{font-size:15px;font-weight:800;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;display:block;margin-bottom:4px}
 .presetItem .pn{font-size:10px;color:var(--muted);white-space:nowrap;overflow:hidden;text-overflow:ellipsis;display:block}
 
-#step1{max-width:640px;margin:26px auto;text-align:center;position:relative;z-index:2}
-#drop{border:2px dashed var(--border2);border-radius:18px;padding:42px 20px;cursor:pointer;background:rgba(12,34,23,.35);position:relative;z-index:2}
+#step1{max-width:640px;margin:26px auto;text-align:center}
+#drop{border:2px dashed var(--border2);border-radius:18px;padding:42px 20px;cursor:pointer;background:rgba(12,34,23,.35)}
 #drop:hover{border-color:var(--acc2);background:rgba(20,108,67,.2)}
 #drop .big{font-size:42px}
-.fileInputHidden{
-  position:absolute;
-  width:1px;
-  height:1px;
-  opacity:0;
-  pointer-events:none;
-}
 
 #editor{display:grid;grid-template-columns:minmax(340px,1fr) 430px;gap:16px;align-items:start}
 @media(max-width:1100px){#editor{grid-template-columns:1fr}}
@@ -248,7 +241,7 @@ a.dl{display:inline-block;margin-top:10px;background:linear-gradient(135deg,var(
         <p><b>Clique para escolher</b> ou arraste um arquivo de vídeo aqui</p>
         <p class="pill" style="display:inline-block;margin-top:8px">MP4 · MOV · WEBM · MKV — processado no seu dispositivo</p>
       </div>
-      <input type="file" id="fileInput" accept="video/*" class="fileInputHidden">
+      <input type="file" id="fileInput" accept="video/*" style="position:absolute;width:1px;height:1px;opacity:0;pointer-events:none">
     </div>
   </section>
 
@@ -317,14 +310,14 @@ a.dl{display:inline-block;margin-top:10px;background:linear-gradient(135deg,var(
           <div id="previewWrap">
             <canvas id="previewCanvas" width="1080" height="1920"></canvas>
           </div>
-          <p class="signal" style="text-align:center">Arraste na prévia para mover <b style="color:var(--warn)">divisória</b>, <b style="color:var(--warn)">gancho</b> e <b style="color:var(--acc2)">legenda</b>.</p>
+          <p class="signal" style="text-align:center">Arraste na prévia para mover <b style="color:var(--warn)">divisória</b>, <b style="color:var(--warn)">gancho/título</b> e <b style="color:var(--acc2)">legenda</b>. Título e # são gravados no vídeo.</p>
           <div class="row" style="width:100%;gap:8px;margin-bottom:4px">
             <button type="button" class="ghost small" id="splitUpBtn" style="flex:1">▲ Subir divisória (Jogo +)</button>
             <button type="button" class="ghost small" id="splitDownBtn" style="flex:1">▼ Descer divisória (Câmera +)</button>
           </div>
           <div class="row" style="width:100%">
             <div><label>Tamanho da LEGENDA</label><input type="range" id="fontSz" min="24" max="140" value="48"></div>
-            <div><label>Tamanho do GANCHO</label><input type="range" id="hookSz" min="28" max="200" value="64"></div>
+            <div><label>Tamanho do GANCHO / TÍTULO</label><input type="range" id="hookSz" min="28" max="200" value="54"></div>
           </div>
         </div>
       </div>
@@ -373,10 +366,10 @@ a.dl{display:inline-block;margin-top:10px;background:linear-gradient(135deg,var(
       </div>
 
       <div class="card" id="cardHook">
-        <div class="card-h"><h2>6. Gancho visual — estilo CapCut (50+ presets)</h2><button class="collapse-btn">▾</button></div>
+        <div class="card-h"><h2>6. Gancho / Título visual — estilo CapCut (50+ presets)</h2><button class="collapse-btn">▾</button></div>
         <div class="card-body">
-          <label>Texto do gancho (aparece no vídeo)</label>
-          <input type="text" id="hookText" placeholder="ex.: ESSA JOGADA É IRREAL! 😱">
+          <label>Texto do gancho / título (gravado no vídeo e no nome do arquivo)</label>
+          <input type="text" id="hookText" placeholder="ex.: ESSA JOGADA É IRREAL! 😱🔥">
           <label>Presets de estilo (fonte + cor + fundo + animação)</label>
           <div class="presetGrid" id="hookPresets"></div>
           <label>Fonte</label>
@@ -416,9 +409,9 @@ a.dl{display:inline-block;margin-top:10px;background:linear-gradient(135deg,var(
         <div class="card-body">
           <label>Formato</label>
           <select id="expMode">
-            <option value="fast">WebM vertical — rápido, queima legenda + gancho (recomendado)</option>
-            <option value="mp4">MP4 vertical (H.264) via ffmpeg.wasm</option>
-            <option value="avi">AVI vertical (30 / 60 fps) — queima legenda + gancho</option>
+            <option value="fast">WebM vertical — rápido, com áudio + título + # (recomendado)</option>
+            <option value="mp4">MP4 vertical (H.264 + AAC) via ffmpeg.wasm</option>
+            <option value="avi">AVI vertical (30 / 60 fps + áudio PCM) — tempo exato</option>
           </select>
           <label>Resolução e FPS</label>
           <select id="expTier">
@@ -439,7 +432,7 @@ a.dl{display:inline-block;margin-top:10px;background:linear-gradient(135deg,var(
 </main>
 
 <div class="footer">ClipFactory × WaveCombat Hub — <a style="color:var(--acc2)" href="https://youtube.com/@capudooficial7?si=awSkNhuT4YY177Yp" target="_blank" rel="noopener">inscreva-se no canal ↗</a></div>
-<div id="appVersion">v0.017</div>
+<div id="appVersion">v0.018</div>
 
 <script src="https://cdn.jsdelivr.net/npm/ts-ebml@3.0.2/dist/EBML.min.js"></script>
 <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
@@ -448,7 +441,7 @@ a.dl{display:inline-block;margin-top:10px;background:linear-gradient(135deg,var(
 <script src="./wallet.js"></script>
 <script>
 "use strict";
-const EDITOR_VERSION = "0.017";
+const EDITOR_VERSION = "0.018";
 document.getElementById("appVersion").textContent = "v" + EDITOR_VERSION;
 window.latestUpdateUrl = "./index.html";
 

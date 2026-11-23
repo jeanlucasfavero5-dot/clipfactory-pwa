@@ -1,6 +1,6 @@
 /* ============================================================
    Integração Hub WaveCombat — Supabase (assinaturas + creditos_videos + carteira_diamantes)
-   v0.017: Correção da coluna updated_at em assinaturas + durações exatas de 30s e 60s
+   v0.018: Correção da coluna updated_at + durações exatas de 30s e 60s
    ============================================================ */
 "use strict";
 
@@ -335,9 +335,6 @@ async function addExtraCreditsToSupabase(qty) {
   renderWalletBar();
 }
 
-/* ============================================================
-   1) Checagem prévia (ANTES de renderizar) — NÃO desconta nada
-   ============================================================ */
 window.checkCanDownloadVideos = async function(neededCount = 1) {
   if (!HUB.playerId) return true;
   await syncAllAccountStateFromSupabase();
@@ -352,9 +349,6 @@ window.checkCanDownloadVideos = async function(neededCount = 1) {
   return false;
 };
 
-/* ============================================================
-   2) Consumo atômico (SOMENTE após o vídeo válido estar pronto)
-   ============================================================ */
 async function consumeOneVideoFromCloud() {
   const sb = getSupabase();
 

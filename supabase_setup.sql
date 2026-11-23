@@ -1,5 +1,5 @@
 -- ============================================================
--- ClipFactory / WaveCombat Hub — Tabelas, RLS e RPC Atômica (v0.018)
+-- ClipFactory / WaveCombat Hub — Tabelas, RLS e RPC Atômica (v0.021)
 -- Execute este script no SQL Editor do Supabase
 -- ============================================================
 

@@ -2468,8 +2468,66 @@ function bindDropZone() {
   }
 }
 
+
+function initStudioDock() {
+  const dockBtns = document.querySelectorAll(".dock-btn");
+  const drawer = $("studioDrawer");
+  const drawerTitle = $("drawerTitle");
+  const closeDrawerBtn = $("closeDrawerBtn");
+  const panes = document.querySelectorAll(".drawer-pane");
+
+  if (!dockBtns.length || !drawer) return;
+
+  function openPane(paneId, labelText, btnEl) {
+    const isAlreadyActive = btnEl.classList.contains("active") && !drawer.classList.contains("collapsed-drawer");
+    if (isAlreadyActive) {
+      drawer.classList.add("collapsed-drawer");
+      dockBtns.forEach(b => b.classList.remove("active"));
+      setTimeout(positionBoxes, 180);
+      return;
+    }
+    dockBtns.forEach(b => b.classList.remove("active"));
+    btnEl.classList.add("active");
+    drawer.classList.remove("collapsed-drawer");
+    if (drawerTitle) drawerTitle.textContent = labelText || "Configurações";
+
+    panes.forEach(p => {
+      p.classList.toggle("active", p.id === paneId);
+    });
+
+    const activePane = document.getElementById(paneId);
+    if (activePane) {
+      activePane.querySelectorAll(".card.collapsed").forEach(c => {
+        c.classList.remove("collapsed");
+        syncCollapseIcon(c);
+      });
+    }
+    setTimeout(positionBoxes, 180);
+  }
+
+  dockBtns.forEach(btn => {
+    btn.addEventListener("click", () => {
+      openPane(btn.dataset.pane, btn.dataset.title, btn);
+    });
+  });
+
+  if (closeDrawerBtn) {
+    closeDrawerBtn.addEventListener("click", () => {
+      drawer.classList.add("collapsed-drawer");
+      dockBtns.forEach(b => b.classList.remove("active"));
+      setTimeout(positionBoxes, 180);
+    });
+  }
+
+  const defaultBtn = document.querySelector('.dock-btn[data-pane="pane-cap"]') || dockBtns[0];
+  if (defaultBtn) {
+    openPane(defaultBtn.dataset.pane, defaultBtn.dataset.title, defaultBtn);
+  }
+}
+
 window.addEventListener("DOMContentLoaded", () => {
   initCollapsibleCards();
+  initStudioDock();
   initStyleControls();
   initCropControls();
   initTimeline();

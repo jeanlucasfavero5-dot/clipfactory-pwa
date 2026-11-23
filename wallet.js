@@ -1,6 +1,6 @@
 /* ============================================================
    Integração Hub WaveCombat — Supabase (assinaturas + creditos_videos + carteira_diamantes)
-   v0.018: Correção da coluna updated_at + durações exatas de 30s e 60s
+   v0.021: Correção da coluna updated_at + durações exatas de 30s e 60s
    ============================================================ */
 "use strict";
 
@@ -630,8 +630,10 @@ async function subscribeWeekly() {
 
 function injectHubCard() {
   if (!HUB.playerId) return;
-  const col = document.querySelector("#editor > div:last-child");
+  const col = document.getElementById("hubDrawerContainer") || document.querySelector("#editor > div:last-child");
   if (!col || document.getElementById("hubCard")) return;
+  const placeholder = document.getElementById("hubDrawerPlaceholder");
+  if (placeholder) placeholder.remove();
   injectPremiumPanel(col);
   const card = document.createElement("div");
   card.className = "card";
@@ -658,7 +660,7 @@ function injectHubCard() {
       </div>
       <div id="hubJobInfo" class="signal" style="margin-top:8px"></div>
     </div>`;
-  col.insertBefore(card, col.children[1] || null);
+  col.appendChild(card);
   if (typeof initCollapsibleCards === "function") initCollapsibleCards();
 
   card.querySelectorAll(".planCard").forEach(pc => pc.onclick = () => {

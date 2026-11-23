@@ -302,7 +302,11 @@ a.dl{display:inline-block;margin-top:10px;background:linear-gradient(135deg,var(
           <div id="previewWrap">
             <canvas id="previewCanvas" width="1080" height="1920"></canvas>
           </div>
-          <p class="signal" style="text-align:center">Arraste na prévia para mover <b style="color:var(--warn)">gancho</b> e <b style="color:var(--acc2)">legenda</b>.</p>
+                    <p class="signal" style="text-align:center">Arraste na prévia para mover <b style="color:var(--warn)">divisória</b>, <b style="color:var(--warn)">gancho</b> e <b style="color:var(--acc2)">legenda</b>.</p>
+          <div class="row" style="width:100%;gap:8px;margin-bottom:4px">
+            <button type="button" class="ghost small" id="splitUpBtn" style="flex:1">▲ Subir divisória (Jogo +)</button>
+            <button type="button" class="ghost small" id="splitDownBtn" style="flex:1">▼ Descer divisória (Câmera +)</button>
+          </div>
           <div class="row" style="width:100%">
             <div><label>Tamanho da LEGENDA</label><input type="range" id="fontSz" min="24" max="140" value="48"></div>
             <div><label>Tamanho do GANCHO</label><input type="range" id="hookSz" min="28" max="200" value="64"></div>
@@ -419,7 +423,7 @@ a.dl{display:inline-block;margin-top:10px;background:linear-gradient(135deg,var(
 </main>
 
 <div class="footer">ClipFactory × WaveCombat Hub — <a style="color:var(--acc2)" href="https://youtube.com/@capudooficial7?si=awSkNhuT4YY177Yp" target="_blank" rel="noopener">inscreva-se no canal ↗</a></div>
-<div id="appVersion">v0.002</div>
+<div id="appVersion">v0.003</div>
 
 <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
 <script src="./presets.js"></script>
@@ -427,7 +431,7 @@ a.dl{display:inline-block;margin-top:10px;background:linear-gradient(135deg,var(
 <script src="./wallet.js"></script>
 <script>
 "use strict";
-const EDITOR_VERSION = "0.002";
+const EDITOR_VERSION = "0.003";
 document.getElementById("appVersion").textContent = "v" + EDITOR_VERSION;
 
 if ("serviceWorker" in navigator) {

@@ -7,9 +7,9 @@ const state = {
   videoUrl: null,
   duration: 0,
   cropCam: { x: 0.04, y: 0.05, w: 0.32, h: 0.28 },
-  cropGame: { x: 0.10, y: 0.32, w: 0.80, h: 0.62 },
+  cropGame: { x: 0.08, y: 0.25, w: 0.84, h: 0.68 },
   camOnTop: true,
-  layout: "split", // split | cam_only | game_only
+  layout: "split",
   splitRatio: 0.34,
   segStart: 0,
   segEnd: 1800,
@@ -37,7 +37,8 @@ const state = {
     x: 0.5,
     y: 0.16
   },
-  draggingOverlay: null // { type: 'hook' | 'cap' }
+  draggingOverlay: null,
+  isExporting: false
 };
 
 function fmt(sec) {
@@ -51,6 +52,10 @@ function clamp(v, min, max) {
   return Math.max(min, Math.min(max, v));
 }
 
+function isMobileDevice() {
+  return /Android|iPhone|iPad|iPod|Mobile/i.test(navigator.userAgent || "") || (window.innerWidth <= 820);
+}
+
 function setExportLog(msg, pct = null) {
   const log = $("expLog");
   if (log) {
@@ -62,7 +67,6 @@ function setExportLog(msg, pct = null) {
   }
 }
 
-/* ---------------- inicialização de presets e swatches ---------------- */
 function applyStyleToTarget(target, preset) {
   target.font = preset.font;
   target.color = preset.color;
@@ -147,7 +151,6 @@ function initStyleControls() {
   };
 }
 
-/* ---------------- colapsar cards ---------------- */
 function initCollapsibleCards() {
   document.querySelectorAll(".card").forEach(card => {
     const btn = card.querySelector(".collapse-btn");
@@ -161,7 +164,6 @@ function initCollapsibleCards() {
   });
 }
 
-/* ---------------- upload e abertura do editor ---------------- */
 function loadVideoFile(file) {
   if (!file) return;
   if (state.videoUrl) URL.revokeObjectURL(state.videoUrl);
@@ -208,7 +210,6 @@ function resetToStep1() {
   if (typeof window.updateHubButton === "function") window.updateHubButton();
 }
 
-/* ---------------- caixas de enquadramento e divisória ---------------- */
 function setLayoutMode(mode) {
   state.layout = mode;
   document.querySelectorAll(".layoutBtn").forEach(b => {
@@ -248,7 +249,7 @@ function positionBoxes() {
 }
 
 function attachBoxInteraction(boxEl, cropObj) {
-  let mode = null; // 'move' | 'resize'
+  let mode = null;
   let startX = 0, startY = 0, orig = null;
 
   boxEl.addEventListener("pointerdown", (e) => {
@@ -283,6 +284,11 @@ function attachBoxInteraction(boxEl, cropObj) {
   });
 }
 
+function setSplitRatio(newRatio) {
+  state.splitRatio = clamp(newRatio, 0.16, 0.84);
+  positionBoxes();
+}
+
 function initCropControls() {
   attachBoxInteraction($("boxCam"), state.cropCam);
   attachBoxInteraction($("boxGame"), state.cropGame);
@@ -297,8 +303,7 @@ function initCropControls() {
   splitBar.addEventListener("pointermove", (e) => {
     if (!draggingSplit) return;
     const rect = $("cropOverlay").getBoundingClientRect();
-    state.splitRatio = clamp((e.clientY - rect.top) / rect.height, 0.15, 0.85);
-    positionBoxes();
+    setSplitRatio((e.clientY - rect.top) / rect.height);
   });
   splitBar.addEventListener("pointerup", () => { draggingSplit = false; });
 
@@ -312,10 +317,16 @@ function initCropControls() {
     if (info) info.textContent = `Ordem na tela dividida: ${state.camOnTop ? "Câmera em cima / Jogo embaixo" : "Jogo em cima / Câmera embaixo"}.`;
   };
 
+  if ($("splitUpBtn")) {
+    $("splitUpBtn").onclick = () => setSplitRatio(state.splitRatio - 0.05);
+  }
+  if ($("splitDownBtn")) {
+    $("splitDownBtn").onclick = () => setSplitRatio(state.splitRatio + 0.05);
+  }
+
   window.addEventListener("resize", positionBoxes);
 }
 
-/* ---------------- timeline e janela de corte ---------------- */
 function updateSegmentUI() {
   const dur = state.duration || 0;
   let sMin = Math.max(0, parseFloat($("segStart").value) || 0);
@@ -395,7 +406,6 @@ function initTimeline() {
   };
 }
 
-/* ---------------- análise heurística de melhores momentos ---------------- */
 function renderHeatmap(scores) {
   const heat = $("tlHeat");
   if (!heat) return;
@@ -428,31 +438,32 @@ async function analyzeMoments() {
   const clipLen = (typeof window.HUB !== "undefined" && window.HUB.duracao) ? window.HUB.duracao : 30;
   const step = Math.max(5, Math.floor(clipLen / 2));
 
-  // Extrai sinal de áudio real via Web Audio API se possível; senão usa heurística determinística do trecho
   let audioEnvelope = null;
   try {
-    const arrayBuf = await state.file.arrayBuffer();
-    const AudioCtx = window.AudioContext || window.webkitAudioContext;
-    if (AudioCtx) {
-      const ctx = new AudioCtx();
-      const decoded = await ctx.decodeAudioData(arrayBuf.slice(0));
-      const ch = decoded.getChannelData(0);
-      const sampleRate = decoded.sampleRate;
-      const winSamples = Math.max(1, Math.floor(sampleRate * 0.25));
-      const buckets = Math.ceil(ch.length / winSamples);
-      audioEnvelope = new Float32Array(buckets);
-      let maxRms = 0.0001;
-      for (let b = 0; b < buckets; b++) {
-        let sumSq = 0;
-        const from = b * winSamples;
-        const to = Math.min(ch.length, from + winSamples);
-        for (let i = from; i < to; i++) sumSq += ch[i] * ch[i];
-        const rms = Math.sqrt(sumSq / Math.max(1, to - from));
-        audioEnvelope[b] = rms;
-        if (rms > maxRms) maxRms = rms;
+    if (state.file.size <= 140 * 1024 * 1024) {
+      const arrayBuf = await state.file.arrayBuffer();
+      const AudioCtx = window.AudioContext || window.webkitAudioContext;
+      if (AudioCtx) {
+        const ctx = new AudioCtx();
+        const decoded = await ctx.decodeAudioData(arrayBuf.slice(0));
+        const ch = decoded.getChannelData(0);
+        const sampleRate = decoded.sampleRate;
+        const winSamples = Math.max(1, Math.floor(sampleRate * 0.25));
+        const buckets = Math.ceil(ch.length / winSamples);
+        audioEnvelope = new Float32Array(buckets);
+        let maxRms = 0.0001;
+        for (let b = 0; b < buckets; b++) {
+          let sumSq = 0;
+          const from = b * winSamples;
+          const to = Math.min(ch.length, from + winSamples);
+          for (let i = from; i < to; i++) sumSq += ch[i] * ch[i];
+          const rms = Math.sqrt(sumSq / Math.max(1, to - from));
+          audioEnvelope[b] = rms;
+          if (rms > maxRms) maxRms = rms;
+        }
+        for (let b = 0; b < buckets; b++) audioEnvelope[b] = audioEnvelope[b] / maxRms;
+        ctx.close().catch(() => {});
       }
-      for (let b = 0; b < buckets; b++) audioEnvelope[b] = audioEnvelope[b] / maxRms;
-      ctx.close().catch(() => {});
     }
   } catch (e) {
     audioEnvelope = null;
@@ -554,7 +565,6 @@ function renderClipList() {
   }
 }
 
-/* ---------------- legendas + .SRT + Whisper opcional ---------------- */
 function getActiveCaption(currentTime) {
   return state.captions.find(c => currentTime >= c.start && currentTime <= c.end) || null;
 }
@@ -659,7 +669,38 @@ function initCaptions() {
   };
 }
 
-/* ---------------- desenho em canvas 9:16 + arrastar gancho/legenda ---------------- */
+function drawAspectFillCrop(ctx, videoEl, crop, dx, dy, dw, dh) {
+  const vw = videoEl.videoWidth || 1280;
+  const vh = videoEl.videoHeight || 720;
+
+  const rawSw = Math.max(8, crop.w * vw);
+  const rawSh = Math.max(8, crop.h * vh);
+  const centerX = clamp(crop.x * vw + rawSw / 2, 0, vw);
+  const centerY = clamp(crop.y * vh + rawSh / 2, 0, vh);
+
+  const dstAspect = Math.max(0.1, dw / Math.max(1, dh));
+  let srcW = rawSw;
+  let srcH = rawSh;
+
+  if (srcW / srcH > dstAspect) {
+    srcW = Math.min(vw, srcH * dstAspect);
+  } else {
+    srcH = Math.min(vh, srcW / dstAspect);
+  }
+
+  const sx = clamp(centerX - srcW / 2, 0, Math.max(0, vw - srcW));
+  const sy = clamp(centerY - srcH / 2, 0, Math.max(0, vh - srcH));
+  const sw = Math.min(vw - sx, srcW);
+  const sh = Math.min(vh - sy, srcH);
+
+  ctx.save();
+  ctx.beginPath();
+  ctx.rect(dx, dy, dw, dh);
+  ctx.clip();
+  ctx.drawImage(videoEl, sx, sy, sw, sh, dx, dy, dw, dh);
+  ctx.restore();
+}
+
 function drawStyledText(ctx, text, xNorm, yNorm, fontSize, styleObj, timeSec) {
   if (!text) return;
   const W = ctx.canvas.width;
@@ -736,7 +777,7 @@ function drawStyledText(ctx, text, xNorm, yNorm, fontSize, styleObj, timeSec) {
   ctx.restore();
 }
 
-function drawFrameToCanvas(videoEl, canvas, nowSec) {
+function drawFrameToCanvas(videoEl, canvas, nowSec, showSplitGuide = false) {
   const ctx = canvas.getContext("2d");
   const W = canvas.width;
   const H = canvas.height;
@@ -744,30 +785,43 @@ function drawFrameToCanvas(videoEl, canvas, nowSec) {
   ctx.fillStyle = "#030705";
   ctx.fillRect(0, 0, W, H);
 
-  const vw = videoEl.videoWidth || 1280;
-  const vh = videoEl.videoHeight || 720;
-
   if (videoEl.readyState >= 2) {
-    const drawCrop = (crop, dx, dy, dw, dh) => {
-      const sx = clamp(crop.x * vw, 0, vw - 2);
-      const sy = clamp(crop.y * vh, 0, vh - 2);
-      const sw = clamp(crop.w * vw, 2, vw - sx);
-      const sh = clamp(crop.h * vh, 2, vh - sy);
-      ctx.drawImage(videoEl, sx, sy, sw, sh, dx, dy, dw, dh);
-    };
-
     if (state.layout === "cam_only") {
-      drawCrop(state.cropCam, 0, 0, W, H);
+      drawAspectFillCrop(ctx, videoEl, state.cropCam, 0, 0, W, H);
     } else if (state.layout === "game_only") {
-      drawCrop(state.cropGame, 0, 0, W, H);
+      drawAspectFillCrop(ctx, videoEl, state.cropGame, 0, 0, W, H);
     } else {
       const splitY = Math.round(state.splitRatio * H);
       if (state.camOnTop) {
-        drawCrop(state.cropCam, 0, 0, W, splitY);
-        drawCrop(state.cropGame, 0, splitY, W, H - splitY);
+        drawAspectFillCrop(ctx, videoEl, state.cropCam, 0, 0, W, splitY);
+        drawAspectFillCrop(ctx, videoEl, state.cropGame, 0, splitY, W, H - splitY);
       } else {
-        drawCrop(state.cropGame, 0, 0, W, splitY);
-        drawCrop(state.cropCam, 0, splitY, W, H - splitY);
+        drawAspectFillCrop(ctx, videoEl, state.cropGame, 0, 0, W, splitY);
+        drawAspectFillCrop(ctx, videoEl, state.cropCam, 0, splitY, W, H - splitY);
+      }
+
+      if (showSplitGuide) {
+        ctx.save();
+        ctx.strokeStyle = "#f5c518";
+        ctx.lineWidth = 6;
+        ctx.setLineDash([18, 12]);
+        ctx.beginPath();
+        ctx.moveTo(0, splitY);
+        ctx.lineTo(W, splitY);
+        ctx.stroke();
+
+        ctx.setLineDash([]);
+        ctx.fillStyle = "#f5c518";
+        ctx.beginPath();
+        ctx.roundRect(W * 0.5 - 86, splitY - 22, 172, 44, 22);
+        ctx.fill();
+
+        ctx.fillStyle = "#030705";
+        ctx.font = "900 22px system-ui, sans-serif";
+        ctx.textAlign = "center";
+        ctx.textBaseline = "middle";
+        ctx.fillText("⇕ DIVISÓRIA", W * 0.5, splitY);
+        ctx.restore();
       }
     }
   }
@@ -790,10 +844,23 @@ function startPreviewLoop() {
     const rect = canvas.getBoundingClientRect();
     const nx = (e.clientX - rect.left) / rect.width;
     const ny = (e.clientY - rect.top) / rect.height;
+
+    if (state.layout === "split" && Math.abs(ny - state.splitRatio) < 0.055) {
+      state.draggingOverlay = "splitPreview";
+      canvas.setPointerCapture(e.pointerId);
+      return;
+    }
+
     const dHook = Math.hypot(nx - state.hook.x, ny - state.hook.y);
     const dCap = Math.hypot(nx - state.capStyle.x, ny - state.capStyle.y);
-    state.draggingOverlay = dHook <= dCap ? "hook" : "cap";
-    canvas.setPointerCapture(e.pointerId);
+    if (dHook < 0.14 || dCap < 0.14) {
+      state.draggingOverlay = dHook <= dCap ? "hook" : "cap";
+      canvas.setPointerCapture(e.pointerId);
+    } else if (state.layout === "split") {
+      state.draggingOverlay = "splitPreview";
+      setSplitRatio(ny);
+      canvas.setPointerCapture(e.pointerId);
+    }
   });
 
   canvas.addEventListener("pointermove", (e) => {
@@ -801,7 +868,10 @@ function startPreviewLoop() {
     const rect = canvas.getBoundingClientRect();
     const nx = clamp((e.clientX - rect.left) / rect.width, 0.1, 0.9);
     const ny = clamp((e.clientY - rect.top) / rect.height, 0.08, 0.92);
-    if (state.draggingOverlay === "hook") {
+
+    if (state.draggingOverlay === "splitPreview") {
+      setSplitRatio(ny);
+    } else if (state.draggingOverlay === "hook") {
       state.hook.x = nx;
       state.hook.y = ny;
     } else {
@@ -815,19 +885,20 @@ function startPreviewLoop() {
   });
 
   const loop = (ts) => {
-    drawFrameToCanvas(videoEl, canvas, (ts || 0) / 1000);
+    if (!state.isExporting) {
+      drawFrameToCanvas(videoEl, canvas, (ts || 0) / 1000, true);
+    }
     requestAnimationFrame(loop);
   };
   requestAnimationFrame(loop);
 }
 
-/* ---------------- exportação local (WebM via canvas + ffmpeg.wasm opcional) ---------------- */
 const TIER_MAP = {
-  "1080p30": { w: 1080, h: 1920, fps: 30 },
-  "1080p60": { w: 1080, h: 1920, fps: 60 },
-  "720p30":  { w: 720,  h: 1280, fps: 30 },
-  "720p60":  { w: 720,  h: 1280, fps: 60 },
-  "1440p60": { w: 1440, h: 2560, fps: 60 }
+  "1080p30": { w: 1080, h: 1920, fps: 30, bps: 3200000 },
+  "1080p60": { w: 1080, h: 1920, fps: 30, bps: 3500000 },
+  "720p30":  { w: 720,  h: 1280, fps: 24, bps: 1800000 },
+  "720p60":  { w: 720,  h: 1280, fps: 30, bps: 2200000 },
+  "1440p60": { w: 1080, h: 1920, fps: 30, bps: 3800000 }
 };
 
 async function exportVerticalCut() {
@@ -836,10 +907,17 @@ async function exportVerticalCut() {
     alert("Envie um vídeo primeiro.");
     return;
   }
+  if (state.isExporting) return;
 
   const tierKey = $("expTier").value;
-  const mode = $("expMode").value;
-  const spec = TIER_MAP[tierKey] || TIER_MAP["1080p30"];
+  let spec = { ...(TIER_MAP[tierKey] || TIER_MAP["720p30"]) };
+
+  if (isMobileDevice()) {
+    spec.w = Math.min(spec.w, 720);
+    spec.h = Math.min(spec.h, 1280);
+    spec.fps = Math.min(spec.fps, 24);
+    spec.bps = Math.min(spec.bps, 1500000);
+  }
 
   const startSec = state.activeClip ? state.activeClip.start : (videoEl.currentTime || 0);
   const maxDur = (typeof window.HUB !== "undefined" && window.HUB.duracao) ? window.HUB.duracao : 30;
@@ -851,17 +929,25 @@ async function exportVerticalCut() {
 
   const btn = $("exportBtn");
   btn.disabled = true;
+  state.isExporting = true;
   $("expResult").innerHTML = "";
-  setExportLog(`Preparando gravação (${spec.w}×${spec.h} · ${spec.fps} fps)...`, 10);
+  setExportLog(`Renderizando em modo seguro (${spec.w}×${spec.h} · ${spec.fps} fps)...`, 10);
+
+  let stream = null;
+  let recorder = null;
 
   try {
-    const stream = offCanvas.captureStream(spec.fps);
-    const mimeType = MediaRecorder.isTypeSupported("video/webm;codecs=vp9")
-      ? "video/webm;codecs=vp9"
+    stream = offCanvas.captureStream(spec.fps);
+    const mimeType = MediaRecorder.isTypeSupported("video/webm;codecs=vp8")
+      ? "video/webm;codecs=vp8"
       : "video/webm";
-    const recorder = new MediaRecorder(stream, { mimeType });
-    const chunks = [];
 
+    recorder = new MediaRecorder(stream, {
+      mimeType,
+      videoBitsPerSecond: spec.bps
+    });
+
+    const chunks = [];
     recorder.ondataavailable = (ev) => {
       if (ev.data && ev.data.size > 0) chunks.push(ev.data);
     };
@@ -870,54 +956,57 @@ async function exportVerticalCut() {
       recorder.onstop = () => resolve(new Blob(chunks, { type: mimeType }));
     });
 
+    videoEl.muted = true;
     videoEl.currentTime = startSec;
-    await new Promise(r => { videoEl.onseeked = r; });
+    await new Promise(r => {
+      const onSeek = () => {
+        videoEl.removeEventListener("seeked", onSeek);
+        r();
+      };
+      videoEl.addEventListener("seeked", onSeek);
+    });
 
-    recorder.start(250);
+    recorder.start(1000);
     await videoEl.play().catch(() => {});
 
     const totalSpan = Math.max(0.5, endSec - startSec);
+    const frameDelay = Math.max(35, Math.floor(1000 / spec.fps));
+
     while (!videoEl.paused && !videoEl.ended && videoEl.currentTime < endSec) {
-      drawFrameToCanvas(videoEl, offCanvas, videoEl.currentTime);
-      const pct = 15 + clamp(((videoEl.currentTime - startSec) / totalSpan) * 75, 0, 75);
-      setExportLog(`Renderizando corte ${fmt(videoEl.currentTime)} / ${fmt(endSec)}...`, pct);
-      await new Promise(r => setTimeout(r, 1000 / spec.fps));
+      drawFrameToCanvas(videoEl, offCanvas, videoEl.currentTime, false);
+      const pct = 10 + clamp(((videoEl.currentTime - startSec) / totalSpan) * 82, 0, 82);
+      setExportLog(`Processando ${fmt(videoEl.currentTime)} / ${fmt(endSec)}...`, pct);
+      await new Promise(r => setTimeout(r, frameDelay));
     }
 
     videoEl.pause();
-    recorder.stop();
+    if (recorder.state !== "inactive") recorder.stop();
     const webmBlob = await donePromise;
+    chunks.length = 0;
 
-    let finalBlob = webmBlob;
-    let ext = "webm";
-
-    if (mode === "mp4") {
-      setExportLog("Tentando converter para MP4 via FFmpeg...", 92);
-      if (window.FFmpegWASM && window.FFmpegWASM.createFFmpeg) {
-        const { createFFmpeg, fetchFile } = window.FFmpegWASM;
-        const ffmpeg = createFFmpeg({ log: false });
-        await ffmpeg.load();
-        ffmpeg.FS("writeFile", "in.webm", await fetchFile(webmBlob));
-        await ffmpeg.run("-i", "in.webm", "-c:v", "libx264", "-preset", "ultrafast", "out.mp4");
-        const data = ffmpeg.FS("readFile", "out.mp4");
-        finalBlob = new Blob([data.buffer], { type: "video/mp4" });
-        ext = "mp4";
-      } else {
-        setExportLog("FFmpeg.wasm não carregado neste navegador; gerando WebM pronto para uso.", 95);
-      }
+    if (stream) {
+      stream.getTracks().forEach(t => t.stop());
     }
+    offCanvas.width = 1;
+    offCanvas.height = 1;
 
-    const url = URL.createObjectURL(finalBlob);
-    setExportLog("Exportação concluída com sucesso!", 100);
-    $("expResult").innerHTML = `<a class="dl" href="${url}" download="clipfactory_corte_${spec.w}x${spec.h}.${ext}">⬇ Baixar corte (.${ext})</a>`;
+    const url = URL.createObjectURL(webmBlob);
+    setExportLog("Corte concluído sem erro de memória!", 100);
+    $("expResult").innerHTML = `<a class="dl" href="${url}" download="clipfactory_corte_${spec.w}x${spec.h}.webm">⬇ Baixar corte (.webm)</a>`;
   } catch (err) {
-    setExportLog("Erro na exportação: " + err.message, 0);
+    if (recorder && recorder.state !== "inactive") {
+      try { recorder.stop(); } catch (e) {}
+    }
+    if (stream) {
+      stream.getTracks().forEach(t => t.stop());
+    }
+    setExportLog("Falha na exportação: " + err.message, 0);
   } finally {
+    state.isExporting = false;
     btn.disabled = false;
   }
 }
 
-/* ---------------- boot ---------------- */
 window.addEventListener("DOMContentLoaded", () => {
   initCollapsibleCards();
   initStyleControls();

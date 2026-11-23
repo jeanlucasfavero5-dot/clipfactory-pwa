@@ -1,5 +1,5 @@
 {
-  "version": "0.002",
+  "version": "0.003",
   "url": "./login.html",
-  "notes": "Integração completa das funções do editor original no PWA com tema verde escuro e preto"
+  "notes": "Assinatura via Supabase (assinaturas), recorte aspect-fill sem esmagar, divisória na prévia 9:16 e exportação leve sem estourar memória no celular"
 }

@@ -1,0 +1,107 @@
+<!DOCTYPE html>
+<html lang="pt-BR">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
+<meta name="theme-color" content="#07140e">
+<link rel="manifest" href="./manifest.json">
+<link rel="icon" href="./icon-192.png">
+<title>ClipFactory — Carregando</title>
+<style>
+  * { box-sizing: border-box; margin: 0; padding: 0; }
+  html, body {
+    width: 100%;
+    height: 100%;
+    overflow: hidden;
+    background: #030705;
+    font-family: system-ui, -apple-system, Segoe UI, Roboto, sans-serif;
+  }
+  .splash-wrap {
+    position: relative;
+    width: 100%;
+    height: 100%;
+    background: url("./splash-bg.jpg") center center / cover no-repeat;
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    justify-content: flex-end;
+    padding: 36px 24px 54px;
+  }
+  .splash-vignette {
+    position: absolute;
+    inset: 0;
+    background: radial-gradient(circle at center, rgba(3,7,5,0.18) 0%, rgba(3,7,5,0.72) 100%);
+    pointer-events: none;
+  }
+  .splash-ui {
+    position: relative;
+    z-index: 2;
+    width: 100%;
+    max-width: 340px;
+    text-align: center;
+    color: #e9fff2;
+  }
+  .splash-pill {
+    display: inline-flex;
+    align-items: center;
+    gap: 8px;
+    padding: 8px 16px;
+    border-radius: 999px;
+    background: rgba(7, 20, 14, 0.85);
+    border: 1px solid rgba(74, 222, 128, 0.45);
+    font-size: 13px;
+    font-weight: 700;
+    letter-spacing: 0.4px;
+    box-shadow: 0 8px 28px rgba(0,0,0,0.65);
+  }
+  .dot {
+    width: 9px;
+    height: 9px;
+    border-radius: 50%;
+    background: #4ade80;
+    box-shadow: 0 0 12px #4ade80;
+    animation: pulse 1s infinite alternate;
+  }
+  .bar {
+    margin-top: 14px;
+    width: 100%;
+    height: 5px;
+    border-radius: 999px;
+    background: rgba(255,255,255,0.16);
+    overflow: hidden;
+  }
+  .bar-fill {
+    width: 0%;
+    height: 100%;
+    background: linear-gradient(90deg, #22c55e, #4ade80, #ffd166);
+    animation: load2s 2s linear forwards;
+  }
+  @keyframes load2s {
+    from { width: 0%; }
+    to { width: 100%; }
+  }
+  @keyframes pulse {
+    from { transform: scale(0.85); opacity: 0.65; }
+    to { transform: scale(1.2); opacity: 1; }
+  }
+</style>
+</head>
+<body>
+  <div class="splash-wrap">
+    <div class="splash-vignette"></div>
+    <div class="splash-ui">
+      <div class="splash-pill"><span class="dot"></span><span>CLIPFACTORY v0.017 · INICIANDO</span></div>
+      <div class="bar"><div class="bar-fill"></div></div>
+    </div>
+  </div>
+  <script>
+    if ("serviceWorker" in navigator) {
+      navigator.serviceWorker.register("./sw.js").catch(() => {});
+    }
+    setTimeout(() => {
+      const qs = window.location.search || "";
+      window.location.replace("./login.html" + qs);
+    }, 2000);
+  </script>
+</body>
+</html>

@@ -1,0 +1,26 @@
+{
+  "name": "ClipFactory",
+  "short_name": "ClipFactory",
+  "id": "./index.html",
+  "start_url": "./index.html",
+  "scope": "./",
+  "display": "standalone",
+  "orientation": "portrait",
+  "background_color": "#030705",
+  "theme_color": "#07140e",
+  "description": "Editor de cortes verticais 9:16 com câmera + jogo, legendas, gancho, carteira de diamantes e PWA.",
+  "icons": [
+    {
+      "src": "./icon-192.png",
+      "sizes": "192x192",
+      "type": "image/png",
+      "purpose": "any"
+    },
+    {
+      "src": "./icon-512.png",
+      "sizes": "512x512",
+      "type": "image/png",
+      "purpose": "any maskable"
+    }
+  ]
+}

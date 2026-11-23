@@ -1,5 +1,5 @@
 {
-  "version": "0.003",
-  "url": "./login.html",
-  "notes": "Assinatura via Supabase (assinaturas), recorte aspect-fill sem esmagar, divisória na prévia 9:16 e exportação leve sem estourar memória no celular"
+  "version": "0.004",
+  "url": "./index.html",
+  "notes": "Splash de 2s com fundo exclusivo, login com fundo da imagem, créditos de vídeos disponíveis no painel, descontos apenas no download, áudio na exportação e correção da duração do vídeo."
 }

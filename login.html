@@ -262,6 +262,13 @@ input:focus{
   z-index:20;
 }
 </style>
+
+<style id="cfBgOverride">
+  body {
+    background: linear-gradient(rgba(3, 7, 5, 0.72), rgba(3, 7, 5, 0.84)), url("./splash-bg.jpg") center center / cover fixed no-repeat !important;
+  }
+</style>
+
 </head>
 <body>
 
@@ -320,13 +327,13 @@ input:focus{
   </div>
 </main>
 
-<div id="appVersion">v0.003</div>
+<div id="appVersion">v0.004</div>
 
 <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
 <script>
 "use strict";
 
-const APP_VERSION = "0.003";
+const APP_VERSION = "0.004";
 const VERSION_CHECK_URL = "./version.json";
 const SUPABASE_URL = "https://ipqjeacdfiomcxfuixdj.supabase.co";
 const SUPABASE_KEY = "sb_publishable_EWW84q_43YbOvMwB_Rua-A_X465PbLP";

@@ -75,13 +75,13 @@ function applyStyleToTarget(target, preset) {
   target.anim = preset.anim;
 
   if (target === state.capStyle) {
-    $("capFont").value = preset.font;
-    $("capBg").value = preset.bg;
-    $("capAnim").value = preset.anim;
+    if ($("capFont")) $("capFont").value = preset.font;
+    if ($("capBg")) $("capBg").value = preset.bg;
+    if ($("capAnim")) $("capAnim").value = preset.anim;
   } else {
-    $("hookFont").value = preset.font;
-    $("hookBg").value = preset.bg;
-    $("hookAnim").value = preset.anim;
+    if ($("hookFont")) $("hookFont").value = preset.font;
+    if ($("hookBg")) $("hookBg").value = preset.bg;
+    if ($("hookAnim")) $("hookAnim").value = preset.anim;
   }
 }
 
@@ -132,36 +132,98 @@ function initStyleControls() {
   buildSwatches("hookColorSwatches", COLOR_SWATCHES, c => { state.hook.color = c; }, state.hook.color);
   buildSwatches("hookBgSwatches", BG_SWATCHES, c => { state.hook.bgColor = c; }, state.hook.bgColor);
 
-  $("capFont").onchange = e => { state.capStyle.font = e.target.value; };
-  $("capBg").onchange = e => { state.capStyle.bg = e.target.value; };
-  $("capAnim").onchange = e => { state.capStyle.anim = e.target.value; };
+  if ($("capFont")) $("capFont").onchange = e => { state.capStyle.font = e.target.value; };
+  if ($("capBg")) $("capBg").onchange = e => { state.capStyle.bg = e.target.value; };
+  if ($("capAnim")) $("capAnim").onchange = e => { state.capStyle.anim = e.target.value; };
 
-  $("hookText").value = state.hook.text;
-  $("hookText").oninput = e => { state.hook.text = e.target.value; };
-  $("hookFont").value = state.hook.font;
-  $("hookFont").onchange = e => { state.hook.font = e.target.value; };
-  $("hookBg").value = state.hook.bg;
-  $("hookBg").onchange = e => { state.hook.bg = e.target.value; };
-  $("hookAnim").value = state.hook.anim;
-  $("hookAnim").onchange = e => { state.hook.anim = e.target.value; };
+  if ($("hookText")) {
+    $("hookText").value = state.hook.text;
+    $("hookText").oninput = e => { state.hook.text = e.target.value; };
+  }
+  if ($("hookFont")) {
+    $("hookFont").value = state.hook.font;
+    $("hookFont").onchange = e => { state.hook.font = e.target.value; };
+  }
+  if ($("hookBg")) {
+    $("hookBg").value = state.hook.bg;
+    $("hookBg").onchange = e => { state.hook.bg = e.target.value; };
+  }
+  if ($("hookAnim")) {
+    $("hookAnim").value = state.hook.anim;
+    $("hookAnim").onchange = e => { state.hook.anim = e.target.value; };
+  }
 
-  $("hookToggle").onclick = () => {
-    state.hook.enabled = !state.hook.enabled;
-    $("hookToggle").textContent = state.hook.enabled ? "👁 Mostrar/ocultar" : "🙈 Oculto";
-  };
+  if ($("hookToggle")) {
+    $("hookToggle").onclick = () => {
+      state.hook.enabled = !state.hook.enabled;
+      $("hookToggle").textContent = state.hook.enabled ? "👁 Mostrar/ocultar" : "🙈 Oculto";
+    };
+  }
+}
+
+function syncCollapseIcon(card) {
+  const btn = card.querySelector(".collapse-btn");
+  if (!btn) return;
+  const isCollapsed = card.classList.contains("collapsed");
+  btn.textContent = isCollapsed ? "▸" : "▾";
+  btn.setAttribute("aria-expanded", String(!isCollapsed));
 }
 
 function initCollapsibleCards() {
   document.querySelectorAll(".card").forEach(card => {
+    if (card.dataset.collapseBound === "1") return;
+    card.dataset.collapseBound = "1";
     const btn = card.querySelector(".collapse-btn");
     const head = card.querySelector(".card-h");
-    if (!btn || !head) return;
-    head.addEventListener("click", (e) => {
-      if (e.target.closest("button, input, select, a")) return;
+    if (!head) return;
+
+    const toggleCard = (ev) => {
+      ev.preventDefault();
+      ev.stopPropagation();
       card.classList.toggle("collapsed");
-      btn.textContent = card.classList.contains("collapsed") ? "▸" : "▾";
+      syncCollapseIcon(card);
+    };
+
+    if (btn) {
+      btn.type = "button";
+      btn.onclick = toggleCard;
+    }
+
+    head.addEventListener("click", (ev) => {
+      if (ev.target.closest("input, select, textarea, a") || ev.target.closest("button:not(.collapse-btn)")) {
+        return;
+      }
+      card.classList.toggle("collapsed");
+      syncCollapseIcon(card);
     });
+
+    syncCollapseIcon(card);
   });
+}
+
+function resolveVideoDuration(videoEl) {
+  if (Number.isFinite(videoEl.duration) && videoEl.duration > 0) {
+    return videoEl.duration;
+  }
+  if (videoEl.seekable && videoEl.seekable.length > 0) {
+    const end = videoEl.seekable.end(videoEl.seekable.length - 1);
+    if (Number.isFinite(end) && end > 0) return end;
+  }
+  return state.duration || 60;
+}
+
+function applyLoadedDuration(videoEl) {
+  const dur = resolveVideoDuration(videoEl);
+  if (dur > 0) {
+    state.duration = dur;
+    if (!state.segEnd || state.segEnd > dur) {
+      state.segEnd = Math.min(dur, state.maxSegSec);
+    }
+    if ($("segStart")) $("segStart").value = Math.floor(state.segStart / 60);
+    if ($("segEnd")) $("segEnd").value = Math.max(1, Math.round(state.segEnd / 60));
+    updateSegmentUI();
+    updateTimeline();
+  }
 }
 
 function loadVideoFile(file) {
@@ -169,27 +231,31 @@ function loadVideoFile(file) {
   if (state.videoUrl) URL.revokeObjectURL(state.videoUrl);
   state.file = file;
   state.videoUrl = URL.createObjectURL(file);
+  state.duration = 0;
+  state.segStart = 0;
+  state.segEnd = state.maxSegSec;
 
   const videoEl = $("videoEl");
+  videoEl.preload = "auto";
   videoEl.src = state.videoUrl;
   videoEl.load();
 
   $("step1").classList.add("hidden");
   $("editor").classList.remove("hidden");
 
-  videoEl.onloadedmetadata = () => {
-    state.duration = videoEl.duration || 60;
-    state.segStart = 0;
-    state.segEnd = Math.min(state.duration, state.maxSegSec);
-    $("segStart").value = 0;
-    $("segEnd").value = Math.round(state.segEnd / 60);
-    updateSegmentUI();
+  const onMetaOrDur = () => {
+    applyLoadedDuration(videoEl);
     positionBoxes();
-    updateTimeline();
     if (typeof window.updateHubButton === "function") window.updateHubButton();
   };
 
+  videoEl.onloadedmetadata = onMetaOrDur;
+  videoEl.ondurationchange = onMetaOrDur;
+  videoEl.onloadeddata = onMetaOrDur;
   videoEl.ontimeupdate = () => {
+    if (!state.duration && videoEl.duration > 0) {
+      applyLoadedDuration(videoEl);
+    }
     updateTimeline();
   };
 }
@@ -201,10 +267,13 @@ function resetToStep1() {
   if (state.videoUrl) URL.revokeObjectURL(state.videoUrl);
   state.file = null;
   state.videoUrl = null;
+  state.duration = 0;
   state.clips = [];
   state.activeClip = null;
-  $("clipList").innerHTML = `<p class="signal">Clique em <b>Analisar</b> para gerar sugestões de corte com nota.</p>`;
-  $("downloadAllLocalBtn").style.display = "none";
+  if ($("clipList")) {
+    $("clipList").innerHTML = `<p class="signal">Clique em <b>Analisar</b> para gerar sugestões de corte com nota.</p>`;
+  }
+  if ($("downloadAllLocalBtn")) $("downloadAllLocalBtn").style.display = "none";
   $("editor").classList.add("hidden");
   $("step1").classList.remove("hidden");
   if (typeof window.updateHubButton === "function") window.updateHubButton();
@@ -249,6 +318,7 @@ function positionBoxes() {
 }
 
 function attachBoxInteraction(boxEl, cropObj) {
+  if (!boxEl) return;
   let mode = null;
   let startX = 0, startY = 0, orig = null;
 
@@ -294,28 +364,32 @@ function initCropControls() {
   attachBoxInteraction($("boxGame"), state.cropGame);
 
   const splitBar = $("splitBar");
-  let draggingSplit = false;
-  splitBar.addEventListener("pointerdown", (e) => {
-    e.stopPropagation();
-    draggingSplit = true;
-    splitBar.setPointerCapture(e.pointerId);
-  });
-  splitBar.addEventListener("pointermove", (e) => {
-    if (!draggingSplit) return;
-    const rect = $("cropOverlay").getBoundingClientRect();
-    setSplitRatio((e.clientY - rect.top) / rect.height);
-  });
-  splitBar.addEventListener("pointerup", () => { draggingSplit = false; });
+  if (splitBar) {
+    let draggingSplit = false;
+    splitBar.addEventListener("pointerdown", (e) => {
+      e.stopPropagation();
+      draggingSplit = true;
+      splitBar.setPointerCapture(e.pointerId);
+    });
+    splitBar.addEventListener("pointermove", (e) => {
+      if (!draggingSplit) return;
+      const rect = $("cropOverlay").getBoundingClientRect();
+      setSplitRatio((e.clientY - rect.top) / rect.height);
+    });
+    splitBar.addEventListener("pointerup", () => { draggingSplit = false; });
+  }
 
   document.querySelectorAll(".layoutBtn").forEach(btn => {
     btn.onclick = () => setLayoutMode(btn.dataset.layout);
   });
 
-  $("swapBtn").onclick = () => {
-    state.camOnTop = !state.camOnTop;
-    const info = $("segInfo");
-    if (info) info.textContent = `Ordem na tela dividida: ${state.camOnTop ? "Câmera em cima / Jogo embaixo" : "Jogo em cima / Câmera embaixo"}.`;
-  };
+  if ($("swapBtn")) {
+    $("swapBtn").onclick = () => {
+      state.camOnTop = !state.camOnTop;
+      const info = $("segInfo");
+      if (info) info.textContent = `Ordem na tela dividida: ${state.camOnTop ? "Câmera em cima / Jogo embaixo" : "Jogo em cima / Câmera embaixo"}.`;
+    };
+  }
 
   if ($("splitUpBtn")) {
     $("splitUpBtn").onclick = () => setSplitRatio(state.splitRatio - 0.05);
@@ -329,8 +403,8 @@ function initCropControls() {
 
 function updateSegmentUI() {
   const dur = state.duration || 0;
-  let sMin = Math.max(0, parseFloat($("segStart").value) || 0);
-  let eMin = Math.max(0, parseFloat($("segEnd").value) || 0);
+  let sMin = Math.max(0, parseFloat($("segStart")?.value) || 0);
+  let eMin = Math.max(0, parseFloat($("segEnd")?.value) || 0);
 
   let startSec = sMin * 60;
   let endSec = eMin * 60;
@@ -354,15 +428,16 @@ function updateSegmentUI() {
 
 function updateTimeline() {
   const videoEl = $("videoEl");
-  const dur = state.duration || 1;
+  if (!videoEl) return;
+  const dur = resolveVideoDuration(videoEl);
   const cur = videoEl.currentTime || 0;
 
-  if ($("tlHead")) $("tlHead").style.left = `${clamp((cur / dur) * 100, 0, 100)}%`;
+  if ($("tlHead")) $("tlHead").style.left = `${clamp((cur / Math.max(1, dur)) * 100, 0, 100)}%`;
   if ($("tlTime")) $("tlTime").textContent = `${fmt(cur)} / ${fmt(dur)}`;
 
   if (state.activeClip && $("tlFill")) {
-    const leftPct = (state.activeClip.start / dur) * 100;
-    const widthPct = ((state.activeClip.end - state.activeClip.start) / dur) * 100;
+    const leftPct = (state.activeClip.start / Math.max(1, dur)) * 100;
+    const widthPct = ((state.activeClip.end - state.activeClip.start) / Math.max(1, dur)) * 100;
     $("tlFill").style.left = `${clamp(leftPct, 0, 100)}%`;
     $("tlFill").style.width = `${clamp(widthPct, 1, 100)}%`;
   } else if ($("tlFill")) {
@@ -373,37 +448,45 @@ function updateTimeline() {
 
 function initTimeline() {
   const tl = $("tl");
-  tl.addEventListener("click", (e) => {
-    if (!state.duration) return;
-    const rect = tl.getBoundingClientRect();
-    const ratio = clamp((e.clientX - rect.left) / rect.width, 0, 1);
-    $("videoEl").currentTime = ratio * state.duration;
-    updateTimeline();
-  });
+  if (tl) {
+    tl.addEventListener("click", (e) => {
+      const dur = resolveVideoDuration($("videoEl"));
+      if (!dur) return;
+      const rect = tl.getBoundingClientRect();
+      const ratio = clamp((e.clientX - rect.left) / rect.width, 0, 1);
+      $("videoEl").currentTime = ratio * dur;
+      updateTimeline();
+    });
+  }
 
-  $("segStart").onchange = updateSegmentUI;
-  $("segEnd").onchange = updateSegmentUI;
+  if ($("segStart")) $("segStart").onchange = updateSegmentUI;
+  if ($("segEnd")) $("segEnd").onchange = updateSegmentUI;
 
-  $("segHereBtn").onclick = () => {
-    const cur = $("videoEl").currentTime || 0;
-    state.segStart = cur;
-    state.segEnd = Math.min(state.duration || (cur + state.maxSegSec), cur + state.maxSegSec);
-    $("segStart").value = (state.segStart / 60).toFixed(1);
-    $("segEnd").value = (state.segEnd / 60).toFixed(1);
-    updateSegmentUI();
-  };
+  if ($("segHereBtn")) {
+    $("segHereBtn").onclick = () => {
+      const cur = $("videoEl").currentTime || 0;
+      const dur = resolveVideoDuration($("videoEl"));
+      state.segStart = cur;
+      state.segEnd = Math.min(dur || (cur + state.maxSegSec), cur + state.maxSegSec);
+      $("segStart").value = (state.segStart / 60).toFixed(1);
+      $("segEnd").value = (state.segEnd / 60).toFixed(1);
+      updateSegmentUI();
+    };
+  }
 
-  $("playBtn").onclick = () => {
-    const v = $("videoEl");
-    if (!v.src) return;
-    if (v.paused) {
-      v.play().catch(() => {});
-      $("playBtn").textContent = "⏸ Pausar";
-    } else {
-      v.pause();
-      $("playBtn").textContent = "▶ Prévia";
-    }
-  };
+  if ($("playBtn")) {
+    $("playBtn").onclick = () => {
+      const v = $("videoEl");
+      if (!v.src) return;
+      if (v.paused) {
+        v.play().catch(() => {});
+        $("playBtn").textContent = "⏸ Pausar";
+      } else {
+        v.pause();
+        $("playBtn").textContent = "▶ Prévia";
+      }
+    };
+  }
 }
 
 function renderHeatmap(scores) {
@@ -429,12 +512,15 @@ async function analyzeMoments() {
     return;
   }
 
+  applyLoadedDuration(videoEl);
+
   const btn = $("analyzeBtn");
   btn.disabled = true;
   btn.textContent = "⏳ Analisando...";
 
   const startSec = state.segStart || 0;
-  const endSec = Math.max(startSec + 10, state.segEnd || state.duration || 60);
+  const maxDur = state.duration || 60;
+  const endSec = Math.max(startSec + 10, Math.min(maxDur, state.segEnd || maxDur));
   const clipLen = (typeof window.HUB !== "undefined" && window.HUB.duracao) ? window.HUB.duracao : 30;
   const step = Math.max(5, Math.floor(clipLen / 2));
 
@@ -498,7 +584,7 @@ async function analyzeMoments() {
     candidates.push({
       idx: candidates.length + 1,
       start: t,
-      end: Math.min(state.duration || endSec, t + clipLen),
+      end: Math.min(maxDur, t + clipLen),
       score,
       viral_title: VIRAL_TITLES[candidates.length % VIRAL_TITLES.length],
       hashtags: VIRAL_HASHTAGS[candidates.length % VIRAL_HASHTAGS.length].split(" "),
@@ -529,6 +615,78 @@ function selectClip(clip) {
   updateTimeline();
 }
 
+function openClipPreviewModal(clip) {
+  const existing = document.getElementById("clipPreviewModal");
+  if (existing) existing.remove();
+
+  const modal = document.createElement("div");
+  modal.id = "clipPreviewModal";
+  modal.className = "clipModalBackdrop";
+
+  const previewUrl = state.videoUrl;
+  const startSec = Number(clip.start || 0);
+  const endSec = Number(clip.end || (startSec + 30));
+
+  modal.innerHTML = `
+    <div class="clipModalBox">
+      <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:10px">
+        <b>👁 Visualizar Clipe #${clip.idx} (${fmt(startSec)} → ${fmt(endSec)})</b>
+        <button type="button" class="ghost small" id="closeClipModalBtn">✕</button>
+      </div>
+      <video id="modalClipVideo" src="${previewUrl}" controls playsinline style="width:100%;max-height:58vh;border-radius:10px;background:#000"></video>
+      <div class="signal" style="margin-top:8px">🎯 ${clip.viral_title || ""}</div>
+      <div class="row" style="margin-top:12px;gap:8px">
+        <button type="button" class="ghost small" id="modalLoopBtn" style="flex:1">🔁 Repetir trecho</button>
+        <button type="button" class="small" id="modalDownloadClipBtn" style="flex:1">⬇ Baixar clipe</button>
+      </div>
+    </div>
+  `;
+
+  document.body.appendChild(modal);
+  const vid = modal.querySelector("#modalClipVideo");
+  vid.currentTime = startSec;
+  vid.play().catch(() => {});
+
+  const onTick = () => {
+    if (vid.currentTime >= endSec) {
+      vid.currentTime = startSec;
+      vid.play().catch(() => {});
+    }
+  };
+  vid.addEventListener("timeupdate", onTick);
+
+  const closeModal = () => {
+    vid.pause();
+    vid.removeEventListener("timeupdate", onTick);
+    modal.remove();
+  };
+
+  modal.querySelector("#closeClipModalBtn").onclick = closeModal;
+  modal.addEventListener("click", (e) => {
+    if (e.target === modal) closeModal();
+  });
+  modal.querySelector("#modalLoopBtn").onclick = () => {
+    vid.currentTime = startSec;
+    vid.play().catch(() => {});
+  };
+  modal.querySelector("#modalDownloadClipBtn").onclick = async () => {
+    closeModal();
+    await exportAndDownloadClip(clip);
+  };
+}
+
+async function exportAndDownloadClip(clip) {
+  if (typeof window.authorizeClipDownload === "function") {
+    const allowed = await window.authorizeClipDownload(clip, 1);
+    if (!allowed) return;
+  }
+  await exportVerticalCut({
+    startOverride: clip.start,
+    endOverride: clip.end,
+    fileName: `clipfactory_corte_${clip.idx}_${Math.round(clip.start)}s_${Math.round(clip.end)}s.webm`
+  });
+}
+
 function renderClipList() {
   const list = $("clipList");
   if (!list) return;
@@ -545,22 +703,45 @@ function renderClipList() {
         <div class="info">
           <b>${fmt(c.start)} → ${fmt(c.end)}</b> (${Math.round(c.end - c.start)}s)
           <div class="viral">🎯 ${c.viral_title}</div>
-          <div class="tags">${c.hashtags.join(" ")}</div>
+          <div class="tags">${(c.hashtags || []).join(" ")}</div>
           <div class="signal">🔊 ${Math.round(c.signals.audio_peak * 100)}% · 🎬 ${Math.round(c.signals.motion * 100)}% · 🔥 ${Math.round(c.signals.intensity * 100)}%</div>
         </div>
-        <button class="small ghost useClipBtn">▶ Usar</button>
+        <div style="display:flex;flex-direction:column;gap:6px;min-width:96px">
+          <button type="button" class="small ghost viewClipBtn">👁 Visualizar</button>
+          <button type="button" class="small dlClipBtn">⬇ Baixar</button>
+        </div>
       </div>
     `;
   }).join("");
 
   list.querySelectorAll(".clipItem").forEach((row, i) => {
-    row.querySelector(".useClipBtn").onclick = () => selectClip(state.clips[i]);
+    const clip = state.clips[i];
+    row.querySelector(".viewClipBtn").onclick = () => {
+      selectClip(clip);
+      openClipPreviewModal(clip);
+    };
+    row.querySelector(".dlClipBtn").onclick = async () => {
+      selectClip(clip);
+      await exportAndDownloadClip(clip);
+    };
   });
 
   if ($("downloadAllLocalBtn")) {
     $("downloadAllLocalBtn").style.display = "inline-flex";
-    $("downloadAllLocalBtn").onclick = () => {
-      alert("Use o painel do Hub WaveCombat para gerar e baixar o pacote completo de clipes com cobrança/plano confirmado no servidor.");
+    $("downloadAllLocalBtn").textContent = "⬇ Baixar todos os clipes";
+    $("downloadAllLocalBtn").onclick = async () => {
+      if (!state.clips.length) return;
+      if (typeof window.authorizeClipDownload === "function") {
+        const ok = await window.authorizeClipDownload(state.clips[0], state.clips.length);
+        if (!ok) return;
+      }
+      for (const c of state.clips) {
+        await exportVerticalCut({
+          startOverride: c.start,
+          endOverride: c.end,
+          fileName: `clipfactory_corte_${c.idx}.webm`
+        });
+      }
     };
   }
 }
@@ -617,56 +798,60 @@ function exportSrt() {
 }
 
 function initCaptions() {
-  $("addCapBtn").onclick = () => {
-    const t = Math.floor(($("videoEl").currentTime || 0) * 10) / 10;
-    state.captions.push({ start: t, end: t + 3, text: "NOVA LEGENDA" });
-    renderCaptionList();
-  };
+  if ($("addCapBtn")) {
+    $("addCapBtn").onclick = () => {
+      const t = Math.floor(($("videoEl").currentTime || 0) * 10) / 10;
+      state.captions.push({ start: t, end: t + 3, text: "NOVA LEGENDA" });
+      renderCaptionList();
+    };
+  }
 
-  $("srtBtn").onclick = exportSrt;
+  if ($("srtBtn")) $("srtBtn").onclick = exportSrt;
 
-  $("whisperBtn").onclick = async () => {
-    const key = $("whisperKey").value.trim();
-    if (!key) {
-      alert("Informe uma chave da OpenAI ou adicione legendas manuais.");
-      return;
-    }
-    if (!state.file) {
-      alert("Envie um vídeo primeiro.");
-      return;
-    }
-    $("whisperBtn").disabled = true;
-    $("whisperBtn").textContent = "⏳...";
-    try {
-      const fd = new FormData();
-      fd.append("file", state.file, state.file.name);
-      fd.append("model", "whisper-1");
-      fd.append("response_format", "verbose_json");
-      const res = await fetch("https://api.openai.com/v1/audio/transcriptions", {
-        method: "POST",
-        headers: { Authorization: `Bearer ${key}` },
-        body: fd
-      });
-      if (!res.ok) throw new Error("Falha na transcrição (" + res.status + ")");
-      const data = await res.json();
-      if (Array.isArray(data.segments) && data.segments.length) {
-        state.captions = data.segments.map(seg => ({
-          start: Number(seg.start || 0),
-          end: Number(seg.end || (Number(seg.start || 0) + 3)),
-          text: String(seg.text || "").trim()
-        })).filter(c => c.text);
-        renderCaptionList();
-      } else if (data.text) {
-        state.captions = [{ start: 0, end: 5, text: data.text.trim() }];
-        renderCaptionList();
+  if ($("whisperBtn")) {
+    $("whisperBtn").onclick = async () => {
+      const key = $("whisperKey").value.trim();
+      if (!key) {
+        alert("Informe uma chave da OpenAI ou adicione legendas manuais.");
+        return;
       }
-    } catch (e) {
-      alert("Erro ao transcrever: " + e.message);
-    } finally {
-      $("whisperBtn").disabled = false;
-      $("whisperBtn").textContent = "🪄 Transcrever";
-    }
-  };
+      if (!state.file) {
+        alert("Envie um vídeo primeiro.");
+        return;
+      }
+      $("whisperBtn").disabled = true;
+      $("whisperBtn").textContent = "⏳...";
+      try {
+        const fd = new FormData();
+        fd.append("file", state.file, state.file.name);
+        fd.append("model", "whisper-1");
+        fd.append("response_format", "verbose_json");
+        const res = await fetch("https://api.openai.com/v1/audio/transcriptions", {
+          method: "POST",
+          headers: { Authorization: `Bearer ${key}` },
+          body: fd
+        });
+        if (!res.ok) throw new Error("Falha na transcrição (" + res.status + ")");
+        const data = await res.json();
+        if (Array.isArray(data.segments) && data.segments.length) {
+          state.captions = data.segments.map(seg => ({
+            start: Number(seg.start || 0),
+            end: Number(seg.end || (Number(seg.start || 0) + 3)),
+            text: String(seg.text || "").trim()
+          })).filter(c => c.text);
+          renderCaptionList();
+        } else if (data.text) {
+          state.captions = [{ start: 0, end: 5, text: data.text.trim() }];
+          renderCaptionList();
+        }
+      } catch (e) {
+        alert("Erro ao transcrever: " + e.message);
+      } finally {
+        $("whisperBtn").disabled = false;
+        $("whisperBtn").textContent = "🪄 Transcrever";
+      }
+    };
+  }
 }
 
 function drawAspectFillCrop(ctx, videoEl, crop, dx, dy, dw, dh) {
@@ -827,18 +1012,19 @@ function drawFrameToCanvas(videoEl, canvas, nowSec, showSplitGuide = false) {
   }
 
   if (state.hook.enabled && state.hook.text) {
-    drawStyledText(ctx, state.hook.text, state.hook.x, state.hook.y, +$("hookSz").value || 64, state.hook, nowSec);
+    drawStyledText(ctx, state.hook.text, state.hook.x, state.hook.y, +($("hookSz")?.value) || 64, state.hook, nowSec);
   }
 
   const activeCue = getActiveCaption(videoEl.currentTime || 0);
   if (activeCue && activeCue.text) {
-    drawStyledText(ctx, activeCue.text, state.capStyle.x, state.capStyle.y, +$("fontSz").value || 48, state.capStyle, nowSec);
+    drawStyledText(ctx, activeCue.text, state.capStyle.x, state.capStyle.y, +($("fontSz")?.value) || 48, state.capStyle, nowSec);
   }
 }
 
 function startPreviewLoop() {
   const canvas = $("previewCanvas");
   const videoEl = $("videoEl");
+  if (!canvas || !videoEl) return;
 
   canvas.addEventListener("pointerdown", (e) => {
     const rect = canvas.getBoundingClientRect();
@@ -901,7 +1087,7 @@ const TIER_MAP = {
   "1440p60": { w: 1080, h: 1920, fps: 30, bps: 3800000 }
 };
 
-async function exportVerticalCut() {
+async function exportVerticalCut(opts = {}) {
   const videoEl = $("videoEl");
   if (!state.file || !videoEl.src) {
     alert("Envie um vídeo primeiro.");
@@ -909,42 +1095,81 @@ async function exportVerticalCut() {
   }
   if (state.isExporting) return;
 
-  const tierKey = $("expTier").value;
+  applyLoadedDuration(videoEl);
+
+  const tierKey = $("expTier")?.value || "720p30";
   let spec = { ...(TIER_MAP[tierKey] || TIER_MAP["720p30"]) };
 
   if (isMobileDevice()) {
     spec.w = Math.min(spec.w, 720);
     spec.h = Math.min(spec.h, 1280);
     spec.fps = Math.min(spec.fps, 24);
-    spec.bps = Math.min(spec.bps, 1500000);
+    spec.bps = Math.min(spec.bps, 1600000);
   }
 
-  const startSec = state.activeClip ? state.activeClip.start : (videoEl.currentTime || 0);
-  const maxDur = (typeof window.HUB !== "undefined" && window.HUB.duracao) ? window.HUB.duracao : 30;
-  const endSec = state.activeClip ? state.activeClip.end : Math.min(state.duration || (startSec + maxDur), startSec + maxDur);
+  const maxDur = resolveVideoDuration(videoEl);
+  const maxClipLen = (typeof window.HUB !== "undefined" && window.HUB.duracao) ? window.HUB.duracao : 30;
+  const startSec = Number.isFinite(opts.startOverride)
+    ? opts.startOverride
+    : (state.activeClip ? state.activeClip.start : (videoEl.currentTime || 0));
+  const endSec = Number.isFinite(opts.endOverride)
+    ? opts.endOverride
+    : (state.activeClip ? state.activeClip.end : Math.min(maxDur, startSec + maxClipLen));
 
   const offCanvas = document.createElement("canvas");
   offCanvas.width = spec.w;
   offCanvas.height = spec.h;
 
   const btn = $("exportBtn");
-  btn.disabled = true;
+  if (btn) btn.disabled = true;
   state.isExporting = true;
-  $("expResult").innerHTML = "";
-  setExportLog(`Renderizando em modo seguro (${spec.w}×${spec.h} · ${spec.fps} fps)...`, 10);
+  if ($("expResult")) $("expResult").innerHTML = "";
+  setExportLog(`Preparando áudio e vídeo (${spec.w}×${spec.h} · ${spec.fps} fps)...`, 8);
 
-  let stream = null;
+  let videoStream = null;
+  let audioCtx = null;
+  let audioSource = null;
+  let audioDest = null;
+  let combinedStream = null;
   let recorder = null;
 
   try {
-    stream = offCanvas.captureStream(spec.fps);
-    const mimeType = MediaRecorder.isTypeSupported("video/webm;codecs=vp8")
-      ? "video/webm;codecs=vp8"
-      : "video/webm";
+    videoStream = offCanvas.captureStream(spec.fps);
+    const tracks = [...videoStream.getVideoTracks()];
 
-    recorder = new MediaRecorder(stream, {
+    // Capture audio track from video element using Web Audio API
+    try {
+      const AudioCtx = window.AudioContext || window.webkitAudioContext;
+      if (AudioCtx) {
+        audioCtx = new AudioCtx();
+        if (audioCtx.state === "suspended") {
+          await audioCtx.resume().catch(() => {});
+        }
+        audioSource = audioCtx.createMediaElementSource(videoEl);
+        audioDest = audioCtx.createMediaStreamDestination();
+        audioSource.connect(audioDest);
+        // Also route to speakers so user can hear during preview/export if desired
+        audioSource.connect(audioCtx.destination);
+        audioDest.stream.getAudioTracks().forEach(t => tracks.push(t));
+      }
+    } catch (audioErr) {
+      console.warn("Áudio não pôde ser anexado via WebAudio:", audioErr);
+    }
+
+    combinedStream = new MediaStream(tracks);
+
+    const candidateMimeTypes = [
+      "video/webm;codecs=vp8,opus",
+      "video/webm;codecs=vp9,opus",
+      "video/webm;codecs=vp8",
+      "video/webm"
+    ];
+    const mimeType = candidateMimeTypes.find(m => MediaRecorder.isTypeSupported(m)) || "video/webm";
+
+    recorder = new MediaRecorder(combinedStream, {
       mimeType,
-      videoBitsPerSecond: spec.bps
+      videoBitsPerSecond: spec.bps,
+      audioBitsPerSecond: 128000
     });
 
     const chunks = [];
@@ -956,26 +1181,34 @@ async function exportVerticalCut() {
       recorder.onstop = () => resolve(new Blob(chunks, { type: mimeType }));
     });
 
-    videoEl.muted = true;
-    videoEl.currentTime = startSec;
+    videoEl.muted = false;
+    videoEl.volume = 1.0;
+    videoEl.currentTime = clamp(startSec, 0, Math.max(0, maxDur - 0.2));
     await new Promise(r => {
+      if (Math.abs(videoEl.currentTime - startSec) < 0.25 && videoEl.readyState >= 2) {
+        return r();
+      }
       const onSeek = () => {
         videoEl.removeEventListener("seeked", onSeek);
         r();
       };
       videoEl.addEventListener("seeked", onSeek);
+      setTimeout(() => {
+        videoEl.removeEventListener("seeked", onSeek);
+        r();
+      }, 1500);
     });
 
-    recorder.start(1000);
+    recorder.start(500);
     await videoEl.play().catch(() => {});
 
     const totalSpan = Math.max(0.5, endSec - startSec);
-    const frameDelay = Math.max(35, Math.floor(1000 / spec.fps));
+    const frameDelay = Math.max(33, Math.floor(1000 / spec.fps));
 
     while (!videoEl.paused && !videoEl.ended && videoEl.currentTime < endSec) {
       drawFrameToCanvas(videoEl, offCanvas, videoEl.currentTime, false);
       const pct = 10 + clamp(((videoEl.currentTime - startSec) / totalSpan) * 82, 0, 82);
-      setExportLog(`Processando ${fmt(videoEl.currentTime)} / ${fmt(endSec)}...`, pct);
+      setExportLog(`Renderizando com áudio ${fmt(videoEl.currentTime)} / ${fmt(endSec)}...`, pct);
       await new Promise(r => setTimeout(r, frameDelay));
     }
 
@@ -984,26 +1217,38 @@ async function exportVerticalCut() {
     const webmBlob = await donePromise;
     chunks.length = 0;
 
-    if (stream) {
-      stream.getTracks().forEach(t => t.stop());
-    }
+    try { audioSource?.disconnect(); } catch (e) {}
+    try { audioDest?.disconnect(); } catch (e) {}
+    try { audioCtx?.close().catch(() => {}); } catch (e) {}
+    try { combinedStream?.getTracks().forEach(t => t.stop()); } catch (e) {}
+    try { videoStream?.getTracks().forEach(t => t.stop()); } catch (e) {}
     offCanvas.width = 1;
     offCanvas.height = 1;
 
     const url = URL.createObjectURL(webmBlob);
-    setExportLog("Corte concluído sem erro de memória!", 100);
-    $("expResult").innerHTML = `<a class="dl" href="${url}" download="clipfactory_corte_${spec.w}x${spec.h}.webm">⬇ Baixar corte (.webm)</a>`;
+    const outName = opts.fileName || `clipfactory_corte_${spec.w}x${spec.h}.webm`;
+    setExportLog("Corte exportado com áudio e duração correta!", 100);
+    if ($("expResult")) {
+      $("expResult").innerHTML = `<a class="dl" href="${url}" download="${outName}">⬇ Baixar corte (.webm)</a>`;
+    }
+    // Trigger automatic download
+    const a = document.createElement("a");
+    a.href = url;
+    a.download = outName;
+    document.body.appendChild(a);
+    a.click();
+    a.remove();
   } catch (err) {
     if (recorder && recorder.state !== "inactive") {
       try { recorder.stop(); } catch (e) {}
     }
-    if (stream) {
-      stream.getTracks().forEach(t => t.stop());
-    }
+    try { audioCtx?.close().catch(() => {}); } catch (e) {}
+    try { combinedStream?.getTracks().forEach(t => t.stop()); } catch (e) {}
+    try { videoStream?.getTracks().forEach(t => t.stop()); } catch (e) {}
     setExportLog("Falha na exportação: " + err.message, 0);
   } finally {
     state.isExporting = false;
-    btn.disabled = false;
+    if (btn) btn.disabled = false;
   }
 }
 
@@ -1015,21 +1260,29 @@ window.addEventListener("DOMContentLoaded", () => {
   initCaptions();
   startPreviewLoop();
 
-  $("drop").onclick = () => $("fileInput").click();
-  $("fileInput").onchange = (e) => {
-    if (e.target.files && e.target.files[0]) loadVideoFile(e.target.files[0]);
-  };
+  if ($("drop")) {
+    $("drop").onclick = () => $("fileInput").click();
+    $("drop").ondragover = (e) => { e.preventDefault(); };
+    $("drop").ondrop = (e) => {
+      e.preventDefault();
+      if (e.dataTransfer && e.dataTransfer.files && e.dataTransfer.files[0]) {
+        loadVideoFile(e.dataTransfer.files[0]);
+      }
+    };
+  }
 
-  $("drop").ondragover = (e) => { e.preventDefault(); };
-  $("drop").ondrop = (e) => {
-    e.preventDefault();
-    if (e.dataTransfer && e.dataTransfer.files && e.dataTransfer.files[0]) {
-      loadVideoFile(e.dataTransfer.files[0]);
-    }
-  };
+  if ($("fileInput")) {
+    $("fileInput").onchange = (e) => {
+      if (e.target.files && e.target.files[0]) loadVideoFile(e.target.files[0]);
+    };
+  }
 
-  $("newVidBtn").onclick = resetToStep1;
-  $("analyzeBtn").onclick = analyzeMoments;
-  $("exportBtn").onclick = exportVerticalCut;
+  if ($("newVidBtn")) $("newVidBtn").onclick = resetToStep1;
+  if ($("analyzeBtn")) $("analyzeBtn").onclick = analyzeMoments;
+  if ($("exportBtn")) $("exportBtn").onclick = () => exportVerticalCut();
   setLayoutMode("split");
+
+  // Re-bind any dynamically added cards
+  const cardObs = new MutationObserver(() => initCollapsibleCards());
+  cardObs.observe(document.body, { childList: true, subtree: true });
 });

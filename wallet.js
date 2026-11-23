@@ -1,5 +1,6 @@
 /* ============================================================
-   Integração Hub WaveCombat — Supabase (assinaturas + carteira_diamantes)
+   Integração Hub WaveCombat — Supabase (assinaturas + creditos_videos + carteira_diamantes)
+   v0.004: Cobrança apenas no DOWNLOAD + contador de vídeos disponíveis + compra avulsa cumulativa
    ============================================================ */
 "use strict";
 
@@ -7,8 +8,8 @@ const SUPABASE_URL = "https://ipqjeacdfiomcxfuixdj.supabase.co";
 const SUPABASE_KEY = "sb_publishable_EWW84q_43YbOvMwB_Rua-A_X465PbLP";
 
 const PLANOS = {
-  pack5:  { label: "5 clipes",          custo: 100,  n: 5,  desc: "cortes avulsos" },
-  pack10: { label: "10 clipes",         custo: 200,  n: 10, desc: "cortes avulsos" },
+  pack5:  { label: "5 clipes",          custo: 100,  n: 5,  desc: "adiciona +5 vídeos" },
+  pack10: { label: "10 clipes",         custo: 200,  n: 10, desc: "adiciona +10 vídeos" },
   weekly: { label: "Assinatura 7 dias", custo: 1000, n: 20, desc: "20 clipes/dia · 2K 60fps" },
 };
 
@@ -34,6 +35,11 @@ const HUB = {
   nick: null,
   diamantes: null,
   sub: null,
+  extraCredits: {
+    videos_restantes: 0,
+    videos_comprados_total: 0,
+    tableAvailable: true
+  },
   plano: new URLSearchParams(window.location.search).get("plano") || "pack5",
   duracao: 30,
   activeJobId: null,
@@ -47,6 +53,37 @@ function getSupabase() {
     HUB.supabase = window.supabase.createClient(SUPABASE_URL, SUPABASE_KEY);
   }
   return HUB.supabase;
+}
+
+function getAvailableVideosSummary() {
+  const hasWeekly = !!(HUB.sub && HUB.sub.ativa);
+  const weeklyLimit = Number(HUB.sub?.limite_diario || 20);
+  const weeklyUsed = Number(HUB.sub?.clipes_hoje || 0);
+  const weeklyRemaining = hasWeekly ? Math.max(0, weeklyLimit - weeklyUsed) : 0;
+
+  const extraRemaining = Math.max(0, Number(HUB.extraCredits?.videos_restantes || 0));
+  const extraTotal = Math.max(0, Number(HUB.extraCredits?.videos_comprados_total || 0));
+
+  const totalAvailable = weeklyRemaining + extraRemaining;
+  const parts = [];
+  if (hasWeekly) {
+    parts.push(`${weeklyRemaining}/${weeklyLimit} semanal`);
+  }
+  if (extraRemaining > 0 || extraTotal > 0 || !hasWeekly) {
+    const denom = extraTotal > 0 ? extraTotal : Math.max(extraRemaining, 10);
+    parts.push(`${extraRemaining}/${denom} avulso`);
+  }
+
+  return {
+    hasWeekly,
+    weeklyLimit,
+    weeklyUsed,
+    weeklyRemaining,
+    extraRemaining,
+    extraTotal,
+    totalAvailable,
+    label: parts.join(" + ")
+  };
 }
 
 function setupPwaInstall() {
@@ -90,15 +127,25 @@ function renderWalletBar(msg, kind) {
   }
 
   const saldo = HUB.diamantes === null ? "…" : `💎 <b style="color:#ffd166">${HUB.diamantes}</b>`;
+  const vids = getAvailableVideosSummary();
   bar.innerHTML = `
     <span>👤 <b>${HUB.nick ?? "carregando…"}</b> <span style="color:var(--muted)">(ID ${HUB.playerId})</span></span>
-    <span style="margin-left:auto">${saldo} diamantes
-      <button class="ghost small" id="walletRefresh" style="margin-left:8px">↻</button></span>
-    ${msg ? `<span style="color:${kind === "err" ? "var(--bad)" : "var(--good)"}">${msg}</span>` : ""}`;
-  document.getElementById("walletRefresh").onclick = () => {
-    loadWallet();
-    refreshPremiumPanel();
-  };
+    <span style="margin-left:auto;display:flex;align-items:center;gap:10px;flex-wrap:wrap">
+      <span>${saldo} diamantes</span>
+      <span>🎬 <b style="color:#4ade80">${vids.label}</b> vídeos p/ baixar</span>
+      <button class="ghost small" id="walletRefresh">↻</button>
+    </span>
+    ${msg ? `<div style="width:100%;margin-top:4px;color:${kind === "err" ? "var(--bad)" : "var(--good)"}">${msg}</div>` : ""}`;
+
+  const refBtn = document.getElementById("walletRefresh");
+  if (refBtn) {
+    refBtn.onclick = async () => {
+      await loadWallet();
+      await loadExtraCredits();
+      await refreshPremiumPanel();
+      updateHubButton();
+    };
+  }
 }
 
 async function loadWallet() {
@@ -119,6 +166,108 @@ async function loadWallet() {
     renderWalletBar("⚠️ Erro ao carregar carteira: " + e.message, "err");
   }
 }
+
+async function loadExtraCredits() {
+  if (!HUB.playerId) return;
+  try {
+    const sb = getSupabase();
+    const { data, error } = await sb
+      .from("creditos_videos")
+      .select("videos_restantes, videos_comprados_total")
+      .eq("id_jogador", HUB.playerId)
+      .maybeSingle();
+
+    if (error) {
+      HUB.extraCredits.tableAvailable = false;
+      return;
+    }
+    HUB.extraCredits.tableAvailable = true;
+    HUB.extraCredits.videos_restantes = Number(data?.videos_restantes || 0);
+    HUB.extraCredits.videos_comprados_total = Number(data?.videos_comprados_total || 0);
+    renderWalletBar();
+  } catch (e) {
+    HUB.extraCredits.tableAvailable = false;
+  }
+}
+
+async function addExtraCreditsToSupabase(qty) {
+  HUB.extraCredits.videos_restantes = Number(HUB.extraCredits.videos_restantes || 0) + qty;
+  HUB.extraCredits.videos_comprados_total = Number(HUB.extraCredits.videos_comprados_total || 0) + qty;
+  renderWalletBar();
+
+  if (!HUB.extraCredits.tableAvailable) return;
+  try {
+    const sb = getSupabase();
+    const payload = {
+      id_jogador: HUB.playerId,
+      videos_restantes: HUB.extraCredits.videos_restantes,
+      videos_comprados_total: HUB.extraCredits.videos_comprados_total,
+      updated_at: new Date().toISOString()
+    };
+    const { error } = await sb.from("creditos_videos").upsert(payload, { onConflict: "id_jogador" });
+    if (error) console.warn("creditos_videos upsert:", error.message);
+  } catch (e) {
+    console.warn("creditos_videos:", e);
+  }
+}
+
+async function consumeOneVideoCreditForDownload() {
+  const hasWeekly = !!(HUB.sub && HUB.sub.ativa);
+  const weeklyLimit = Number(HUB.sub?.limite_diario || 20);
+  const weeklyUsed = Number(HUB.sub?.clipes_hoje || 0);
+
+  if (hasWeekly && weeklyUsed < weeklyLimit) {
+    const nextUsed = weeklyUsed + 1;
+    HUB.sub.clipes_hoje = nextUsed;
+    const sb = getSupabase();
+    const todayStr = new Date().toISOString().slice(0, 10);
+    await sb
+      .from("assinaturas")
+      .update({ clipes_hoje: nextUsed, dia_uso: todayStr, updated_at: new Date().toISOString() })
+      .eq("id_jogador", HUB.playerId);
+    renderWalletBar(`🎬 Download liberado pelo plano semanal (${Math.max(0, weeklyLimit - nextUsed)}/${weeklyLimit} hoje)`, "ok");
+    await refreshPremiumPanel();
+    return true;
+  }
+
+  if (Number(HUB.extraCredits.videos_restantes || 0) > 0) {
+    const nextRem = Math.max(0, Number(HUB.extraCredits.videos_restantes) - 1);
+    HUB.extraCredits.videos_restantes = nextRem;
+    if (HUB.extraCredits.tableAvailable) {
+      const sb = getSupabase();
+      await sb
+        .from("creditos_videos")
+        .update({ videos_restantes: nextRem, updated_at: new Date().toISOString() })
+        .eq("id_jogador", HUB.playerId);
+    }
+    renderWalletBar(`🎬 1 crédito avulso usado (${nextRem}/${Math.max(nextRem, HUB.extraCredits.videos_comprados_total)} restantes)`, "ok");
+    await refreshPremiumPanel();
+    return true;
+  }
+
+  return false;
+}
+
+window.authorizeClipDownload = async function(clip, count = 1) {
+  if (!HUB.playerId) return true;
+  try {
+    let remainingNeeded = count;
+    while (remainingNeeded > 0) {
+      const usedCredit = await consumeOneVideoCreditForDownload();
+      if (!usedCredit) {
+        // Deduct 20 diamonds per video download when no video quota/credit remains
+        const unitCost = 20;
+        await debitDiamonds(unitCost, `Download de clipe #${clip?.idx || ""}`);
+      }
+      remainingNeeded--;
+    }
+    await refreshPremiumPanel();
+    return true;
+  } catch (err) {
+    alert("❌ " + err.message);
+    return false;
+  }
+};
 
 async function fetchSubscriptionFromSupabase() {
   const sb = getSupabase();
@@ -155,14 +304,10 @@ async function injectPremiumPanel(col) {
   card.className = "card";
   card.id = "premiumPanel";
   card.innerHTML = `
-    <div class="card-h"><h2>⭐ Meu plano semanal</h2><button class="collapse-btn">▾</button></div>
+    <div class="card-h"><h2>⭐ Meu plano & créditos de vídeo</h2><button type="button" class="collapse-btn">▾</button></div>
     <div class="card-body"><div id="premiumBody" class="signal">carregando…</div></div>`;
   col.prepend(card);
-  card.querySelector(".card-h").addEventListener("click", (e) => {
-    if (e.target.closest("button")) return;
-    card.classList.toggle("collapsed");
-    card.querySelector(".collapse-btn").textContent = card.classList.contains("collapsed") ? "▸" : "▾";
-  });
+  if (typeof initCollapsibleCards === "function") initCollapsibleCards();
   await refreshPremiumPanel();
 }
 
@@ -172,27 +317,63 @@ async function refreshPremiumPanel() {
   try {
     const s = await fetchSubscriptionFromSupabase();
     HUB.sub = s;
+    const vids = getAvailableVideosSummary();
+
     if (!s.ativa) {
-      body.innerHTML = `<p class="signal">Nenhum plano semanal ativo. Ative para ter <b>20 clipes/dia por 7 dias</b> e <b>2K 60 fps</b>.</p>
-        <button id="renovarWeeklyBtn" style="width:100%;margin-top:8px">⭐ Ativar 7 dias (💎 ${PLANOS.weekly.custo})</button>`;
+      body.innerHTML = `
+        <div class="stat">
+          <div><b>${vids.extraRemaining}/${Math.max(vids.extraRemaining, vids.extraTotal || 0)}</b>vídeos avulsos p/ baixar</div>
+          <div><b>${HUB.diamantes ?? 0}</b>💎 saldo</div>
+          <div><b>Semanal</b>inativo</div>
+        </div>
+        <p class="signal">A cobrança só ocorre ao <b>baixar</b> o vídeo. Compre pacotes avulsos (+5 / +10) ou ative <b>20 clipes/dia por 7 dias</b>.</p>
+        <div class="row" style="gap:8px;margin-top:8px">
+          <button type="button" class="ghost small" id="buyPack5Btn" style="flex:1">+5 vídeos (💎 100)</button>
+          <button type="button" class="ghost small" id="buyPack10Btn" style="flex:1">+10 vídeos (💎 200)</button>
+        </div>
+        <button type="button" id="renovarWeeklyBtn" style="width:100%;margin-top:8px">⭐ Ativar 7 dias (💎 ${PLANOS.weekly.custo})</button>`;
+      body.querySelector("#buyPack5Btn").onclick = () => buyExtraPack("pack5");
+      body.querySelector("#buyPack10Btn").onclick = () => buyExtraPack("pack10");
       body.querySelector("#renovarWeeklyBtn").onclick = subscribeWeekly;
+      renderWalletBar();
       return;
     }
+
     const fim = new Date(s.fim);
     const dias = Math.max(0, Math.ceil((fim - Date.now()) / 86400000));
-    const restantes = Math.max(0, s.limite_diario - (s.clipes_hoje || 0));
     body.innerHTML = `
       <span class="badgePremium">⭐ PREMIUM ATIVO</span>
       <div class="stat">
-        <div><b>${restantes}</b>clipes disponíveis hoje</div>
+        <div><b>${vids.weeklyRemaining}/${vids.weeklyLimit}</b>semanal hoje</div>
+        <div><b>${vids.extraRemaining}/${Math.max(vids.extraRemaining, vids.extraTotal)}</b>avulso extra</div>
         <div><b>${dias}</b>dias restantes</div>
-        <div><b>${s.clipes_hoje || 0}/${s.limite_diario}</b>usados hoje</div>
       </div>
-      <p class="signal">Plano válido até <b>${fim.toLocaleDateString("pt-BR")} ${fim.toLocaleTimeString("pt-BR", { hour: "2-digit", minute: "2-digit" })}</b>.</p>
-      <button id="renovarWeeklyBtn" style="width:100%">🔄 Renovar +7 dias (💎 ${PLANOS.weekly.custo})</button>`;
+      <p class="signal">Plano válido até <b>${fim.toLocaleDateString("pt-BR")} ${fim.toLocaleTimeString("pt-BR", { hour: "2-digit", minute: "2-digit" })}</b>. Você também pode comprar mais vídeos avulsos e somar à sua conta!</p>
+      <div class="row" style="gap:8px;margin-top:6px">
+        <button type="button" class="ghost small" id="buyPack5Btn" style="flex:1">+5 vídeos (💎 100)</button>
+        <button type="button" class="ghost small" id="buyPack10Btn" style="flex:1">+10 vídeos (💎 200)</button>
+      </div>
+      <button type="button" id="renovarWeeklyBtn" style="width:100%;margin-top:8px">🔄 Renovar +7 dias (💎 ${PLANOS.weekly.custo})</button>`;
+    body.querySelector("#buyPack5Btn").onclick = () => buyExtraPack("pack5");
+    body.querySelector("#buyPack10Btn").onclick = () => buyExtraPack("pack10");
     body.querySelector("#renovarWeeklyBtn").onclick = subscribeWeekly;
+    renderWalletBar();
   } catch (e) {
     body.innerHTML = `<span style="color:var(--muted)">Não foi possível consultar assinatura (${e.message}).</span>`;
+  }
+}
+
+async function buyExtraPack(packKey) {
+  const pack = PLANOS[packKey] || PLANOS.pack10;
+  if (!confirm(`Comprar ${pack.label} (+${pack.n} vídeos para download) por 💎 ${pack.custo}?`)) return;
+  try {
+    await debitDiamonds(pack.custo, pack.label);
+    await addExtraCreditsToSupabase(pack.n);
+    renderWalletBar(`✅ +${pack.n} vídeos adicionados para download!`, "ok");
+    await refreshPremiumPanel();
+    updateHubButton();
+  } catch (e) {
+    renderWalletBar("❌ " + e.message, "err");
   }
 }
 
@@ -245,7 +426,7 @@ async function refundDiamonds(amount, reasonLabel) {
 }
 
 async function subscribeWeekly() {
-  if (!confirm(`Ativar/renovar o plano semanal (7 dias) por 💎 ${PLANOS.weekly.custo}?`)) return;
+  if (!confirm(`Ativar/renovar o plano semanal (7 dias · 20 clipes/dia) por 💎 ${PLANOS.weekly.custo}?`)) return;
   const cost = PLANOS.weekly.custo;
   try {
     await debitDiamonds(cost, "Assinatura 7 dias");
@@ -258,24 +439,25 @@ async function subscribeWeekly() {
     const newFim = new Date(baseMs + 7 * 86400000);
     const todayStr = now.toISOString().slice(0, 10);
 
-    const { data: existing } = await sb
-      .from("assinaturas")
-      .select("id_jogador")
-      .eq("id_jogador", HUB.playerId)
-      .maybeSingle();
-
     const payload = {
       id_jogador: HUB.playerId,
       inicio: now.toISOString(),
       fim: newFim.toISOString(),
       limite_diario: 20,
       clipes_hoje: HUB.sub?.clipes_hoje || 0,
-      dia_uso: todayStr
+      dia_uso: todayStr,
+      updated_at: now.toISOString()
     };
+
+    const { data: existing } = await sb
+      .from("assinaturas")
+      .select("id_jogador")
+      .eq("id_jogador", HUB.playerId)
+      .maybeSingle();
 
     const res = existing
       ? await sb.from("assinaturas").update(payload).eq("id_jogador", HUB.playerId)
-      : await sb.from("assinaturas").insert(payload);
+      : await sb.from("assinaturas").upsert(payload, { onConflict: "id_jogador" });
 
     if (res.error) {
       await refundDiamonds(cost, "Erro ao salvar assinatura");
@@ -300,7 +482,7 @@ function injectHubCard() {
   card.className = "card";
   card.id = "hubCard";
   card.innerHTML = `
-    <div class="card-h"><h2>💎 Hub WaveCombat — escolha seu plano</h2><button class="collapse-btn">▾</button></div>
+    <div class="card-h"><h2>💎 Hub WaveCombat — pacotes & geração</h2><button type="button" class="collapse-btn">▾</button></div>
     <div class="card-body">
       <div id="planCards" style="display:grid;grid-template-columns:1fr 1fr 1fr;gap:8px;margin:8px 0">
         ${Object.entries(PLANOS).map(([k, p]) => `
@@ -312,23 +494,19 @@ function injectHubCard() {
       </div>
       <label>Duração de cada clipe</label>
       <div class="row" style="gap:8px">
-        <button class="ghost small durBtn" data-dur="30" style="flex:1">⏱ 30 segundos</button>
-        <button class="ghost small durBtn" data-dur="60" style="flex:1">⏱ 60 segundos</button>
+        <button type="button" class="ghost small durBtn" data-dur="30" style="flex:1">⏱ 30 segundos</button>
+        <button type="button" class="ghost small durBtn" data-dur="60" style="flex:1">⏱ 60 segundos</button>
       </div>
-      <div class="row" style="margin-top:10px">
-        <button id="hubStartBtn" style="flex:1">🎬 Iniciar cortes</button>
-        <button class="ghost small" id="hubJobStatusBtn" style="flex:0 0 auto">🔄 Status</button>
+      <div class="row" style="margin-top:10px;gap:8px">
+        <button type="button" id="hubStartBtn" style="flex:1">🎬 Gerar vídeos (cobrança só no download)</button>
+        <button type="button" class="ghost small" id="hubBuySelectedBtn" style="flex:0 0 auto">💎 Comprar pacote</button>
       </div>
       <div id="hubJobInfo" class="signal" style="margin-top:8px"></div>
       <div id="hubClips" style="margin-top:8px"></div>
     </div>`;
   col.insertBefore(card, col.children[1] || null);
+  if (typeof initCollapsibleCards === "function") initCollapsibleCards();
 
-  card.querySelector(".card-h").addEventListener("click", e => {
-    if (e.target.closest("#hubStartBtn,#hubJobStatusBtn,button")) return;
-    card.classList.toggle("collapsed");
-    card.querySelector(".collapse-btn").textContent = card.classList.contains("collapsed") ? "▸" : "▾";
-  });
   card.querySelectorAll(".planCard").forEach(pc => pc.onclick = () => {
     HUB.plano = pc.dataset.plan;
     card.querySelectorAll(".planCard").forEach(x => x.style.borderColor = "var(--border)");
@@ -344,7 +522,10 @@ function injectHubCard() {
   });
   card.querySelector(`.durBtn[data-dur="${HUB.duracao}"]`).style.borderColor = "var(--accent)";
   document.getElementById("hubStartBtn").onclick = startHubJob;
-  document.getElementById("hubJobStatusBtn").onclick = () => HUB.activeJobId && pollJob(HUB.activeJobId);
+  document.getElementById("hubBuySelectedBtn").onclick = () => {
+    if (HUB.plano === "weekly") subscribeWeekly();
+    else buyExtraPack(HUB.plano);
+  };
   updateHubButton();
 }
 
@@ -352,217 +533,49 @@ function planoSel() { return PLANOS[HUB.plano] || PLANOS.pack5; }
 
 function updateHubButton() {
   const btn = document.getElementById("hubStartBtn");
+  const buyBtn = document.getElementById("hubBuySelectedBtn");
+  if (buyBtn) {
+    buyBtn.textContent = `💎 Comprar ${planoSel().label} (${planoSel().custo})`;
+  }
   if (!btn) return;
   const hasSource = !!(typeof state !== "undefined" && state.file);
-  const already = HUB.activeJobId && ["processing", "queued"].includes(HUB.activeJobStatus || "");
-  const isSubActive = !!(HUB.sub && HUB.sub.ativa && (HUB.sub.limite_diario - (HUB.sub.clipes_hoje || 0)) >= planoSel().n);
-
-  btn.disabled = !hasSource || !!already;
+  btn.disabled = !hasSource;
   if (!hasSource) {
     btn.textContent = "🎬 Envie um vídeo primeiro";
-  } else if (already) {
-    btn.textContent = "⏳ Job em andamento…";
-  } else if (isSubActive) {
-    btn.textContent = `⭐ Gerar ${planoSel().n} clipes de ${HUB.duracao}s (Plano ativo)`;
   } else {
-    btn.textContent = `🎬 Gerar ${planoSel().n} clipes de ${HUB.duracao}s (💎 ${planoSel().custo})`;
+    btn.textContent = `🎬 Gerar cortes de ${HUB.duracao}s (grátis p/ gerar · cobra só ao baixar)`;
   }
-}
-
-async function consumeDailyQuotaIfActive() {
-  if (!HUB.sub || !HUB.sub.ativa) return false;
-  const used = Number(HUB.sub.clipes_hoje || 0);
-  const limit = Number(HUB.sub.limite_diario || 20);
-  const need = planoSel().n;
-  if (used + need > limit) return false;
-
-  const sb = getSupabase();
-  const todayStr = new Date().toISOString().slice(0, 10);
-  const { error } = await sb
-    .from("assinaturas")
-    .update({ clipes_hoje: used + need, dia_uso: todayStr })
-    .eq("id_jogador", HUB.playerId);
-  if (error) return false;
-
-  HUB.sub.clipes_hoje = used + need;
-  await refreshPremiumPanel();
-  return true;
 }
 
 async function startHubJob() {
   const info = document.getElementById("hubJobInfo");
   const btn = document.getElementById("hubStartBtn");
-  let debitedAmount = 0;
 
   try {
     btn.disabled = true;
-    await refreshPremiumPanel();
-    const usedQuota = await consumeDailyQuotaIfActive();
-
-    if (!usedQuota) {
-      const cost = planoSel().custo;
-      await debitDiamonds(cost, planoSel().label);
-      debitedAmount = cost;
-    }
-
-    info.innerHTML = `▸ Preparando ${planoSel().n} cortes de ${HUB.duracao}s na janela ${fmt(state.segStart)} → ${fmt(state.segEnd)}…`;
+    info.innerHTML = `▸ Gerando sugestões de clipes de ${HUB.duracao}s na janela ${fmt(state.segStart)} → ${fmt(state.segEnd)} (nenhum diamante descontado ao gerar)…`;
 
     if (typeof analyzeMoments === "function") {
       await analyzeMoments();
     }
 
-    try {
-      const body = {
-        cam_region: state.cropCam,
-        game_region: state.cropGame,
-        cam_on_top: state.camOnTop,
-        layout: state.layout,
-        split_ratio: state.splitRatio,
-        segment_start: state.segStart || null,
-        segment_end: state.segEnd || null,
-        top_n: planoSel().n,
-        plan: HUB.plano,
-        clip_duration: HUB.duracao,
-        hook: {
-          text: state.hook.text, font: state.hook.font, color: state.hook.color,
-          size: +document.getElementById("hookSz").value, style: state.hook.bg, bg_color: state.hook.bgColor,
-          x: state.hook.x, y: state.hook.y
-        },
-        cap_style: {
-          font: state.capStyle.font, color: state.capStyle.color,
-          size: +document.getElementById("fontSz").value, style: state.capStyle.bg, bg_color: state.capStyle.bgColor,
-          x: state.capStyle.x, y: state.capStyle.y
-        }
-      };
-
-      const fd = new FormData();
-      fd.append("file", state.file, state.file.name);
-      fd.append("id_jogador", HUB.playerId);
-      fd.append("plan", HUB.plano);
-      fd.append("clip_duration", String(HUB.duracao));
-      fd.append("hook", JSON.stringify(body.hook));
-      fd.append("params", JSON.stringify(body));
-
-      const res = await fetch(`${HUB.apiBase}/api/jobs/upload`, { method: "POST", body: fd });
-      if (res.ok) {
-        const job = await res.json();
-        HUB.activeJobId = job.id;
-        HUB.activeJobStatus = job.status;
-        info.innerHTML = `▸ Job <b>${job.id}</b> enviado ao servidor (${planoSel().label}).`;
-        pollJob(job.id);
-        return;
-      }
-      throw new Error("Servidor offline");
-    } catch (backendErr) {
-      if (debitedAmount > 0) {
-        await refundDiamonds(debitedAmount, "Servidor de renderização indisponível");
-        debitedAmount = 0;
-      }
-      info.innerHTML = `▸ Melhores momentos gerados no editor! (Servidor externo offline — 💎 devolvidos automaticamente; você pode exportar direto na seção <b>7. Exportar</b>).`;
-      btn.disabled = false;
-      updateHubButton();
-    }
+    info.innerHTML = `▸ Clipes prontos! Use <b>Visualizar</b> para assistir e <b>Baixar</b> para exportar (desconto ocorre apenas no download).`;
+    btn.disabled = false;
+    updateHubButton();
   } catch (e) {
-    if (debitedAmount > 0) {
-      await refundDiamonds(debitedAmount, "Erro ao iniciar");
-    }
     info.innerHTML = `<span style="color:var(--bad)">✖ ${e.message}</span>`;
     btn.disabled = false;
     updateHubButton();
   }
 }
 
-async function pollJob(id) {
-  const info = document.getElementById("hubJobInfo");
-  const clipsEl = document.getElementById("hubClips");
-  clearTimeout(HUB.pollTimer);
-  const tick = async () => {
-    try {
-      const r = await fetch(`${HUB.apiBase}/api/jobs/${id}`);
-      if (!r.ok) throw new Error("API " + r.status);
-      const j = await r.json();
-      HUB.activeJobStatus = j.status;
-      const pct = Math.round((j.progress || 0) * 100);
-      info.innerHTML = `▸ Job <b>${id}</b> — ${j.status} · ${j.stage || ""} · ${pct}%` +
-        (j.error ? ` <span style="color:var(--bad)">${j.error}</span>` : "");
-      if (j.status === "done") {
-        await renderHubClips(id, clipsEl);
-        loadWallet();
-        refreshPremiumPanel();
-        updateHubButton();
-        return;
-      }
-      if (j.status === "failed") {
-        info.innerHTML += " — <span style='color:var(--warn)'>💎 devolvido automaticamente.</span>";
-        loadWallet();
-        refreshPremiumPanel();
-        updateHubButton();
-        return;
-      }
-    } catch (e) {
-      info.innerHTML = `<span style="color:var(--bad)">✖ Falha ao consultar job: ${e.message}</span>`;
-      updateHubButton();
-      return;
-    }
-    HUB.pollTimer = setTimeout(tick, 3000);
-  };
-  tick();
-}
-
-async function authorizeDownload(jobId, all) {
-  const r = await fetch(`${HUB.apiBase}/api/jobs/${jobId}/authorize-download`, {
-    method: "POST", headers: { "Content-Type": "application/json" },
-    body: JSON.stringify({ id_jogador: HUB.playerId, tier: all ? "all" : "pack", clip_idxs: [] }),
-  });
-  const j = await r.json().catch(() => ({}));
-  if (!r.ok) throw new Error(j.detail || "Falha na autorização de download");
-  loadWallet(); refreshPremiumPanel();
-  return j;
-}
-
-function triggerDownload(url, name) {
-  const a = document.createElement("a");
-  a.href = url; a.download = name || "";
-  a.target = "_blank"; a.rel = "noopener";
-  document.body.appendChild(a); a.click(); a.remove();
-}
-
-async function renderHubClips(id, clipsEl) {
-  const rc = await fetch(`${HUB.apiBase}/api/jobs/${id}/clips`).then(r => r.json());
-  const clips = rc.clips || [];
-  const rows = clips.map(c => {
-    const url = c.download_url.startsWith("http") ? c.download_url : HUB.apiBase + c.download_url;
-    return `
-      <div class="clipItem">
-        <div class="score" style="border-color:${c.score >= 70 ? "var(--good)" : c.score >= 45 ? "var(--warn)" : "var(--bad)"}">${c.score}<small>NOTA</small></div>
-        <div class="info"><b>${fmt(c.start)} → ${fmt(c.end)}</b> (${Math.round(c.end - c.start)}s)
-          <div class="viral">🎯 ${c.viral_title || ""}</div>
-          <div class="tags">${(c.hashtags || []).join(" ")}</div>
-          <div class="signal">🔊 ${(c.signals.audio_peak * 100) | 0}% · 🎬 ${(c.signals.motion * 100) | 0}% · 🔥 ${(c.signals.intensity * 100) | 0}%</div></div>
-        <button class="small dlOne" data-url="${url}" data-name="clipe_${c.idx}.mp4">⬇</button>
-      </div>`;
-  }).join("") || "<p class='signal'>Nenhum clipe gerado.</p>";
-  clipsEl.innerHTML = rows + `
-    <div class="row" style="gap:8px">
-      <button class="ghost small" id="dlAllHubBtn" style="flex:1">⬇ Baixar todos (cobra o plano 1×)</button>
-    </div>`;
-  clipsEl.querySelectorAll(".dlOne").forEach(b => b.onclick = async () => {
-    try { await authorizeDownload(id, false); } catch (e) { alert(e.message); return; }
-    triggerDownload(b.dataset.url, b.dataset.name);
-  });
-  const allBtn = clipsEl.querySelector("#dlAllHubBtn");
-  if (allBtn) allBtn.onclick = async () => {
-    try { await authorizeDownload(id, true); } catch (e) { alert(e.message); return; }
-    triggerDownload(`${HUB.apiBase}/api/jobs/${id}/download-all.zip`, `clipes_${id}.zip`);
-  };
-}
-
-window.addEventListener("DOMContentLoaded", () => {
+window.addEventListener("DOMContentLoaded", async () => {
   setupPwaInstall();
   renderWalletBar();
   if (!HUB.playerId) return;
-  loadWallet();
-  refreshPremiumPanel();
+  await loadWallet();
+  await loadExtraCredits();
+  await refreshPremiumPanel();
   const obs = new MutationObserver(() => {
     const ed = document.getElementById("editor");
     if (ed && !ed.classList.contains("hidden")) injectHubCard();

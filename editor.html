@@ -204,6 +204,33 @@ a.dl{display:inline-block;margin-top:10px;background:linear-gradient(135deg,var(
   color:#86efac;background:rgba(5,16,10,.9);border:1px solid var(--border);padding:4px 10px;border-radius:99px;z-index:30;
 }
 </style>
+
+<style id="cfBgOverride">
+  body {
+    background: linear-gradient(rgba(3, 7, 5, 0.78), rgba(3, 7, 5, 0.88)), url("./splash-bg.jpg") center center / cover fixed no-repeat !important;
+  }
+  .clipModalBackdrop {
+    position: fixed;
+    inset: 0;
+    background: rgba(0, 0, 0, 0.82);
+    z-index: 9999;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    padding: 16px;
+  }
+  .clipModalBox {
+    width: 100%;
+    max-width: 440px;
+    background: #07140e;
+    border: 1px solid #1f5138;
+    border-radius: 16px;
+    padding: 16px;
+    color: #e9fff2;
+    box-shadow: 0 20px 60px rgba(0,0,0,0.85);
+  }
+</style>
+
 </head>
 <body>
 <header>
@@ -423,7 +450,7 @@ a.dl{display:inline-block;margin-top:10px;background:linear-gradient(135deg,var(
 </main>
 
 <div class="footer">ClipFactory × WaveCombat Hub — <a style="color:var(--acc2)" href="https://youtube.com/@capudooficial7?si=awSkNhuT4YY177Yp" target="_blank" rel="noopener">inscreva-se no canal ↗</a></div>
-<div id="appVersion">v0.003</div>
+<div id="appVersion">v0.004</div>
 
 <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
 <script src="./presets.js"></script>
@@ -431,7 +458,7 @@ a.dl{display:inline-block;margin-top:10px;background:linear-gradient(135deg,var(
 <script src="./wallet.js"></script>
 <script>
 "use strict";
-const EDITOR_VERSION = "0.003";
+const EDITOR_VERSION = "0.004";
 document.getElementById("appVersion").textContent = "v" + EDITOR_VERSION;
 
 if ("serviceWorker" in navigator) {

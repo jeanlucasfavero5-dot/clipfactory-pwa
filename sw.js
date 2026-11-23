@@ -1,6 +1,6 @@
 "use strict";
 
-const CACHE_NAME = "clipfactory-pwa-v0.003";
+const CACHE_NAME = "clipfactory-pwa-v0.004";
 const CORE_ASSETS = [
   "./",
   "./index.html",
@@ -11,6 +11,7 @@ const CORE_ASSETS = [
   "./wallet.js",
   "./manifest.json",
   "./version.json",
+  "./splash-bg.jpg",
   "./icon-192.png",
   "./icon-512.png"
 ];

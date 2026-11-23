@@ -77,9 +77,9 @@ function setExportLog(msg, pct = null) {
 }
 
 /* ============================================================
-   Patch EBML / WebM Duration so players display exact length instead of 0:00
+   Patch EBML / WebM: regrava Duration + Cues + SeekHead (remux via ts-ebml)
    ============================================================ */
-function fixWebmBlobDuration(blob, durationSec) {
+function fixWebmBlobDurationFallback(blob, durationSec) {
   return blob.arrayBuffer().then((buf) => {
     const bytes = new Uint8Array(buf);
     const safeSec = Math.max(0.5, Number(durationSec) || 1);
@@ -149,6 +149,47 @@ function fixWebmBlobDuration(blob, durationSec) {
     }
 
     return new Blob([bytes], { type: blob.type || "video/webm" });
+  }).catch(() => blob);
+}
+
+function fixWebmBlobDuration(blob, durationSec) {
+  // Corrigir apenas o float de Duration não basta: editores (CapCut, InShot,
+  // Kinemaster…) leem a duração pelo Cues/SeekHead do container — sem eles
+  // o app de edição enxerga só os primeiros segundos (ex.: 7s de um vídeo de 30s)
+  // enquanto players simples transmitem até o fim. O ts-ebml faz o remux
+  // completo do cabeçalho: Duration correta + tabela de Cues + SeekHead.
+  const EBMLlib = (typeof window !== "undefined") ? window.EBML : null;
+  if (!EBMLlib || !EBMLlib.tools || typeof EBMLlib.tools.makeMetadataSeekable !== "function") {
+    return fixWebmBlobDurationFallback(blob, durationSec);
+  }
+
+  return blob.arrayBuffer().then((buf) => {
+    try {
+      const decoder = new EBMLlib.Decoder();
+      const reader = new EBMLlib.Reader();
+      const elms = decoder.decode(buf);
+      elms.forEach((elm) => reader.read(elm));
+      reader.stop();
+
+      // Duração medida durante a gravação (ticks de timestampScale); se o
+      // gravador não reportou nada, usa a duração esperada do trecho.
+      let duration = Number(reader.duration) || 0;
+      if (duration <= 0) {
+        const scale = Number(reader.timestampScale) || 1000000;
+        duration = (Math.max(0.5, Number(durationSec) || 1) * 1e9) / scale;
+      }
+      if (duration <= 0) return blob;
+
+      const seekable = EBMLlib.tools.makeMetadataSeekable(reader.metadatas, duration, reader.cues || []);
+      const parts = [new Blob([seekable], { type: blob.type || "video/webm" })];
+      if (reader.metadataSize > 0 && reader.metadataSize < buf.byteLength) {
+        parts.push(blob.slice(reader.metadataSize));
+      }
+      return new Blob(parts, { type: blob.type || "video/webm" });
+    } catch (e) {
+      console.warn("Remux ts-ebml falhou, usando fallback de bytes:", e);
+      return fixWebmBlobDurationFallback(blob, durationSec);
+    }
   }).catch(() => blob);
 }
 

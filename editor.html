@@ -462,6 +462,7 @@ a.dl{display:inline-block;margin-top:10px;background:linear-gradient(135deg,var(
 <div id="appVersion">v0.012</div>
 
   </script>
+<script src="https://cdn.jsdelivr.net/npm/ts-ebml@3.0.2/dist/EBML.min.js"></script>
 <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
 <script>
 (function () {
@@ -514,7 +515,7 @@ async function triggerRealUpdate(btnEl, statusFn) {
 <script src="./wallet.js"></script>
 <script>
 "use strict";
-const EDITOR_VERSION = "0.011";
+const EDITOR_VERSION = "0.013";
 document.getElementById("appVersion").textContent = "v" + EDITOR_VERSION;
 
 if ("serviceWorker" in navigator) {

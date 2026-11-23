@@ -1516,13 +1516,12 @@ async function exportVerticalCut(opts = {}) {
 
     combinedStream = new MediaStream(tracks);
 
-    // MP4 primeiro quando o navegador suporta gravar MP4 nativamente:
-    // o container sai com duração e índice corretos (sem 00:00, seek funcional).
-    // Se não houver suporte, cai para WebM + correção de duração no EBML.
+    // Gravar sempre em WebM: o remux com ts-ebml (fixWebmBlobDuration) regrava
+    // Duration + Cues + SeekHead e o arquivo abre completo em qualquer editor.
+    // NÃO usar video/mp4 do MediaRecorder: o Chrome grava MP4 fragmentado (fMP4),
+    // que players tocam inteiro mas editores (CapCut, InShot, Kinemaster) leem
+    // só o primeiro fragmento — aparece 6-7s de um clipe de 30s.
     const candidateMimeTypes = [
-      "video/mp4;codecs=avc1.42E01E,mp4a.40.2",
-      "video/mp4;codecs=avc1,mp4a.40.2",
-      "video/mp4",
       "video/webm;codecs=vp9,opus",
       "video/webm;codecs=vp8,opus",
       "video/webm;codecs=vp8",

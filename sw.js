@@ -1,6 +1,6 @@
 "use strict";
 
-const CACHE_NAME = "clipfactory-pwa-v0.013";
+const CACHE_NAME = "clipfactory-pwa-v0.014";
 const CORE_ASSETS = [
   "./",
   "./index.html",
@@ -43,6 +43,23 @@ self.addEventListener("fetch", (event) => {
 
   if (url.pathname.endsWith("/version.json") || url.pathname.endsWith("version.json")) {
     event.respondWith(fetch(event.request).catch(() => caches.match(event.request)));
+    return;
+  }
+
+  // JS/HTML/CSS do app: sempre valida na rede primeiro (com no-store para
+  // garantir que uma nova versão do app.js chegue sem depender do cache HTTP).
+  if (/\.(js|html|css)$/.test(url.pathname)) {
+    event.respondWith(
+      fetch(event.request, { cache: "no-store" })
+        .then((response) => {
+          if (response && response.status === 200) {
+            const clone = response.clone();
+            caches.open(CACHE_NAME).then((cache) => cache.put(event.request, clone)).catch(() => {});
+          }
+          return response;
+        })
+        .catch(() => caches.match(event.request))
+    );
     return;
   }
 

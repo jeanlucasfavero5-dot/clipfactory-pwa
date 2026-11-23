@@ -100,7 +100,7 @@
     }
     setTimeout(() => {
       const qs = window.location.search || "";
-      const sep = qs ? "&" : "?"; window.location.replace("./login.html" + qs + sep + "v=0.010");
+      window.location.replace("./login.html" + qs);
     }, 2000);
   </script>
 </body>

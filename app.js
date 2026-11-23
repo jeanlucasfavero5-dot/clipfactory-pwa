@@ -85,7 +85,6 @@ function fixWebmBlobDuration(blob, durationSec) {
     const safeSec = Math.max(0.5, Number(durationSec) || 1);
     const view = new DataView(bytes.buffer, bytes.byteOffset, bytes.byteLength);
 
-    // Default WebM TimestampScale is 1,000,000 ns (1 ms), so Duration in default units is milliseconds
     let scaleNs = 1000000;
     for (let i = 0; i < bytes.length - 6; i++) {
       if (bytes[i] === 0x2A && bytes[i + 1] === 0xD7 && bytes[i + 2] === 0xB1) {
@@ -105,21 +104,44 @@ function fixWebmBlobDuration(blob, durationSec) {
     }
 
     const durationUnits = (safeSec * 1e9) / scaleNs;
-    const durOffset = findFloat64Offset(bytes);
-    if (durOffset !== -1 && durOffset + 8 <= bytes.length) {
-      view.setFloat64(durOffset, durationUnits, false);
-    } else {
-      // Fallback: search for any float64 near 0 or NaN inside Segment Info (0x15 0x49 0xA9 0x66)
-      for (let i = 0; i < Math.min(bytes.length - 12, 8192); i++) {
-        if (bytes[i] === 0x44 && bytes[i + 1] === 0x89) {
-          const sz = bytes[i + 2];
-          if (sz === 0x84 && i + 7 <= bytes.length) {
-            view.setFloat32(i + 3, durationUnits, false);
-            break;
-          }
+    let patched = false;
+
+    for (let i = 0; i < bytes.length - 4; i++) {
+      if (bytes[i] === 0x44 && bytes[i + 1] === 0x89) {
+        const sizeByte = bytes[i + 2];
+        if (sizeByte === 0x88 && i + 11 <= bytes.length) {
+          view.setFloat64(i + 3, durationUnits, false);
+          patched = true;
+        } else if (sizeByte === 0x84 && i + 7 <= bytes.length) {
+          view.setFloat32(i + 3, durationUnits, false);
+          patched = true;
         }
       }
     }
+
+    if (!patched) {
+      const out = [];
+      let injected = false;
+      for (let i = 0; i < bytes.length; i++) {
+        out.push(bytes[i]);
+        if (!injected && i >= 3 && bytes[i - 3] === 0x2A && bytes[i - 2] === 0xD7 && bytes[i - 1] === 0xB1) {
+          const szByte = bytes[i];
+          const len = (szByte >= 0x81 && szByte <= 0x88) ? (szByte & 0x0F) : 0;
+          for (let k = 1; k <= len && i + k < bytes.length; k++) {
+            out.push(bytes[i + k]);
+          }
+          i += len;
+          const durBuf = new ArrayBuffer(8);
+          new DataView(durBuf).setFloat64(0, durationUnits, false);
+          out.push(0x44, 0x89, 0x88, ...new Uint8Array(durBuf));
+          injected = true;
+        }
+      }
+      if (injected) {
+        return new Blob([new Uint8Array(out)], { type: blob.type || "video/webm" });
+      }
+    }
+
     return new Blob([bytes], { type: blob.type || "video/webm" });
   }).catch(() => blob);
 }
@@ -1233,12 +1255,19 @@ async function exportVerticalCut(opts = {}) {
     try {
       const AudioCtx = window.AudioContext || window.webkitAudioContext;
       if (AudioCtx) {
-        audioCtx = new AudioCtx();
+        if (!window.__cfAudioCtx) {
+          window.__cfAudioCtx = new AudioCtx();
+        }
+        audioCtx = window.__cfAudioCtx;
         if (audioCtx.state === "suspended") {
           await audioCtx.resume().catch(() => {});
         }
-        audioSource = audioCtx.createMediaElementSource(videoEl);
+        if (!window.__cfMediaSource) {
+          window.__cfMediaSource = audioCtx.createMediaElementSource(videoEl);
+        }
+        audioSource = window.__cfMediaSource;
         audioDest = audioCtx.createMediaStreamDestination();
+        try { audioSource.disconnect(); } catch (e) {}
         audioSource.connect(audioDest);
         audioSource.connect(audioCtx.destination);
         audioDest.stream.getAudioTracks().forEach(t => tracks.push(t));
@@ -1354,7 +1383,7 @@ async function exportVerticalCut(opts = {}) {
 
     try { audioSource?.disconnect(); } catch (e) {}
     try { audioDest?.disconnect(); } catch (e) {}
-    try { audioCtx?.close().catch(() => {}); } catch (e) {}
+    
     try { combinedStream?.getTracks().forEach(t => t.stop()); } catch (e) {}
     try { videoStream?.getTracks().forEach(t => t.stop()); } catch (e) {}
     offCanvas.width = 1;
@@ -1379,7 +1408,7 @@ async function exportVerticalCut(opts = {}) {
     if (recorder && recorder.state !== "inactive") {
       try { recorder.stop(); } catch (e) {}
     }
-    try { audioCtx?.close().catch(() => {}); } catch (e) {}
+    
     try { combinedStream?.getTracks().forEach(t => t.stop()); } catch (e) {}
     try { videoStream?.getTracks().forEach(t => t.stop()); } catch (e) {}
     setExportLog("Falha na exportação: " + err.message, 0);

@@ -337,11 +337,50 @@ input:focus{
 
 <div id="appVersion">v0.009</div>
 
-<script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
+<script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2">async function triggerRealUpdate(btnEl, statusFn) {
+  if (btnEl) {
+    btnEl.disabled = true;
+    btnEl.textContent = "Baixando e aplicando atualização…";
+  }
+  if (statusFn) statusFn("Baixando nova versão e limpando cache antigo…", "ok");
+  try {
+    if ("serviceWorker" in navigator) {
+      const regs = await navigator.serviceWorker.getRegistrations();
+      for (const r of regs) {
+        await r.update().catch(() => {});
+        if (r.waiting) r.waiting.postMessage({ type: "SKIP_WAITING" });
+      }
+    }
+    if ("caches" in window) {
+      const keys = await caches.keys();
+      await Promise.all(keys.map(k => caches.delete(k)));
+    }
+    // Prefetch core updated files so the new version is downloaded right away
+    const coreFiles = ["./index.html", "./login.html", "./editor.html", "./app.js", "./wallet.js", "./presets.js", "./manifest.json", "./version.json"];
+    await Promise.all(coreFiles.map(u => fetch(`${u}?_upd=${Date.now()}`, { cache: "no-store" }).catch(() => null)));
+  } catch (e) {}
+
+  // If version.json specifies a downloadable zip/package URL, start download too
+  if (window.__cfPackageUrl) {
+    const dl = document.createElement("a");
+    dl.href = window.__cfPackageUrl;
+    dl.download = window.__cfPackageUrl.split("/").pop() || "clipfactory-update.zip";
+    document.body.appendChild(dl);
+    dl.click();
+    dl.remove();
+  }
+
+  const target = (latestUpdateUrl || "./index.html");
+  const sep = target.includes("?") ? "&" : "?";
+  setTimeout(() => {
+    window.location.replace(`${target}${sep}v=0.011&t=${Date.now()}`);
+  }, 350);
+}
+</script>
 <script>
 "use strict";
 
-const APP_VERSION = "0.010";
+const APP_VERSION = "0.011";
 const VERSION_CHECK_URL = "./version.json";
 const SUPABASE_URL = "https://ipqjeacdfiomcxfuixdj.supabase.co";
 const SUPABASE_KEY = "sb_publishable_EWW84q_43YbOvMwB_Rua-A_X465PbLP";
@@ -404,7 +443,8 @@ async function checkForUpdates(showFeedbackIfUpToDate = false) {
     const res = await fetch(`${VERSION_CHECK_URL}?t=${Date.now()}`, { cache: "no-store" });
     if (!res.ok) return;
     const data = await res.json();
-    if (data && isNewerVersion(data.version, APP_VERSION)) {
+    if (data && data.package_url) { window.__cfPackageUrl = data.package_url; }
+      if (data && isNewerVersion(data.version, APP_VERSION)) {
       latestUpdateUrl = data.url || "./login.html";
       $("remoteVerLabel").textContent = `v${data.version}`;
       $("updateBanner").classList.add("show");
@@ -423,21 +463,7 @@ async function checkForUpdates(showFeedbackIfUpToDate = false) {
 
 $("checkUpdManualBtn").addEventListener("click", () => checkForUpdates(true));
 
-$("updateBtn").addEventListener("click", async () => {
-  setStatus("Atualizando aplicativo…", "ok");
-  try {
-    if ("serviceWorker" in navigator) {
-      const regs = await navigator.serviceWorker.getRegistrations();
-      for (const r of regs) await r.update();
-    }
-    if ("caches" in window) {
-      const keys = await caches.keys();
-      await Promise.all(keys.map(k => caches.delete(k)));
-    }
-  } catch (e) {}
-
-  const baseUrl = latestUpdateUrl || "./login.html"; const sep = baseUrl.includes("?") ? "&" : "?"; window.location.replace(baseUrl + sep + "v=" + Date.now());
-});
+$("updateBtn").addEventListener("click", () => triggerRealUpdate($("updateBtn"), setStatus));
 
 window.addEventListener("beforeinstallprompt", e => {
   e.preventDefault();

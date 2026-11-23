@@ -323,7 +323,7 @@ a.dl{display:inline-block;margin-top:10px;background:linear-gradient(135deg,var(
       </div>
 
       <div class="card" id="cardCap">
-        <div class="card-h"><h2>5. Legenda — estilo CapCut (50+ presets)</h2><button class="collapse-btn">▾</button></div>
+        <div class="card-h"><h2>5. Legenda — presets de estúdio (50+)</h2><button class="collapse-btn">▾</button></div>
         <div class="card-body">
           <label>Presets de estilo (fonte + cor + fundo + animação)</label>
           <div class="presetGrid" id="capPresets"></div>
@@ -353,6 +353,10 @@ a.dl{display:inline-block;margin-top:10px;background:linear-gradient(135deg,var(
             <option value="pulse">Pulso</option><option value="shake">Tremor</option>
             <option value="fade">Fade</option><option value="zoomout">Zoom out</option>
           </select>
+          <div style="margin-top:8px">
+            <label>Palavras em destaque na legenda (separadas por vírgula)</label>
+            <input type="text" id="highlightWords" placeholder="ex.: CLUTCH, RANKED, FINAL">
+          </div>
           <div class="row" style="margin-top:8px">
             <input type="password" id="whisperKey" placeholder="Chave OpenAI (opcional — legenda automática)">
             <button class="ghost" id="whisperBtn" style="flex:0 0 auto">🪄 Transcrever</button>
@@ -366,7 +370,7 @@ a.dl{display:inline-block;margin-top:10px;background:linear-gradient(135deg,var(
       </div>
 
       <div class="card" id="cardHook">
-        <div class="card-h"><h2>6. Gancho / Título visual — estilo CapCut (50+ presets)</h2><button class="collapse-btn">▾</button></div>
+        <div class="card-h"><h2>6. Gancho / Título visual — presets de estúdio (50+)</h2><button class="collapse-btn">▾</button></div>
         <div class="card-body">
           <label>Texto do gancho / título (gravado no vídeo e no nome do arquivo)</label>
           <input type="text" id="hookText" placeholder="ex.: ESSA JOGADA É IRREAL! 😱🔥">
@@ -401,6 +405,74 @@ a.dl{display:inline-block;margin-top:10px;background:linear-gradient(135deg,var(
           <div class="row" style="margin-top:8px">
             <button class="ghost small" id="hookToggle">👁 Mostrar/ocultar</button>
           </div>
+          <div style="margin-top:10px;padding-top:10px;border-top:1px solid var(--border)">
+            <label>Linha 2 opcional / Estilo de faixa & cores</label>
+            <input type="text" id="hookLine2" placeholder="Linha 2 opcional (ex.: NO ÚLTIMO SEGUNDO)" style="margin-bottom:8px">
+            <div class="row" style="gap:8px">
+              <div style="flex:1">
+                <label>Estilo da faixa</label>
+                <select id="hookStyle">
+                  <option value="none">Padrão do preset</option>
+                  <option value="ripped">Papel rasgado</option>
+                  <option value="box">Caixa sólida</option>
+                  <option value="notebook">Folha de caderno</option>
+                </select>
+              </div>
+              <div style="flex:1">
+                <label>Cor fundo faixa</label>
+                <input type="color" id="hookBgColor" value="#c80000" style="width:100%;height:34px;background:transparent;border:1px solid var(--border);border-radius:8px;cursor:pointer">
+              </div>
+            </div>
+            <div class="row" style="gap:8px;margin-top:6px">
+              <div style="flex:1">
+                <label>Cor linha 1</label>
+                <input type="color" id="hookColor1" value="#ffffff" style="width:100%;height:34px;background:transparent;border:1px solid var(--border);border-radius:8px;cursor:pointer">
+              </div>
+              <div style="flex:1">
+                <label>Cor linha 2</label>
+                <input type="color" id="hookColor2" value="#ffd166" style="width:100%;height:34px;background:transparent;border:1px solid var(--border);border-radius:8px;cursor:pointer">
+              </div>
+            </div>
+          </div>
+          <div style="margin-top:10px;padding-top:10px;border-top:1px solid var(--border)">
+            <div class="row" style="justify-content:space-between;margin-bottom:6px">
+              <label style="margin:0">Barrinha social & @</label>
+              <label style="margin:0;display:inline-flex;align-items:center;gap:6px;cursor:pointer;text-transform:none">
+                <input type="checkbox" id="socialEnabled"> Ativar
+              </label>
+            </div>
+            <div class="row" style="gap:8px">
+              <div style="flex:1">
+                <label>Plataforma</label>
+                <select id="socialPlatform">
+                  <option value="youtube">YouTube</option>
+                  <option value="instagram">Instagram</option>
+                  <option value="tiktok">TikTok</option>
+                  <option value="kwai">Kwai</option>
+                  <option value="twitch">Twitch</option>
+                  <option value="kick">Kick</option>
+                </select>
+              </div>
+              <div style="flex:1">
+                <label>Seu @</label>
+                <input type="text" id="socialHandle" placeholder="@seuhandle">
+              </div>
+            </div>
+            <div class="row" style="gap:8px;margin-top:6px">
+              <div style="flex:1">
+                <label>Estilo barra</label>
+                <select id="socialBarStyle">
+                  <option value="metallic">Metálica</option>
+                  <option value="neon">Neon</option>
+                  <option value="pill">Pílula</option>
+                </select>
+              </div>
+              <div style="flex:1">
+                <label>Cor barra</label>
+                <input type="color" id="socialBarColor" value="#b80000" style="width:100%;height:34px;background:transparent;border:1px solid var(--border);border-radius:8px;cursor:pointer">
+              </div>
+            </div>
+          </div>
         </div>
       </div>
 
@@ -422,6 +494,7 @@ a.dl{display:inline-block;margin-top:10px;background:linear-gradient(135deg,var(
             <option value="1440p60">⭐ 1440 × 2560 (2K vertical) · 60 fps — só Premium</option>
           </select>
           <button id="exportBtn" style="width:100%;margin-top:12px">⬇ Exportar corte vertical</button>
+          <button type="button" class="ghost small" id="exportPngBtn" style="width:100%;margin-top:8px">🖼 Baixar frame atual (.PNG)</button>
           <div id="expProg"><div id="expProgIn"></div></div>
           <div id="expLog"></div>
           <div id="expResult"></div>
@@ -441,7 +514,7 @@ a.dl{display:inline-block;margin-top:10px;background:linear-gradient(135deg,var(
 <script src="./wallet.js"></script>
 <script>
 "use strict";
-const EDITOR_VERSION = "0.019";
+const EDITOR_VERSION = "0.020";
 document.getElementById("appVersion").textContent = "v" + EDITOR_VERSION;
 window.latestUpdateUrl = "./index.html";
 

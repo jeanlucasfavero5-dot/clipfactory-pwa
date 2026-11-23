@@ -27,9 +27,15 @@ const state = {
     x: 0.5,
     y: 0.78
   },
+  highlightWords: "",
   hook: {
     enabled: false,
     text: "",
+    line2: "",
+    style: "none",
+    bgColor: "#c80000",
+    color1: "#ffffff",
+    color2: "#ffd166",
     font: "Bebas Neue",
     color: "#ffd166",
     bg: "box",
@@ -37,6 +43,15 @@ const state = {
     anim: "pop",
     x: 0.5,
     y: 0.16
+  },
+  social: {
+    enabled: false,
+    platform: "youtube",
+    handle: "",
+    style: "metallic",
+    color: "#b80000",
+    x: 0.5,
+    y: 0.52
   },
   draggingOverlay: null,
   isExporting: false
@@ -1628,6 +1643,224 @@ function drawHashtagsBanner(ctx, hashtags, W, H, scaleFactor = 1) {
   ctx.restore();
 }
 
+function drawRippedBanner(ctx, x, y, w, h, fillColor, borderColor) {
+  ctx.save();
+  const teeth = 26;
+  const step = w / teeth;
+  if (borderColor) {
+    ctx.fillStyle = borderColor;
+    ctx.beginPath();
+    ctx.moveTo(x - 8, y - 8);
+    for (let i = 0; i <= teeth; i++) {
+      const jitter = ((i * 17) % 8) - 4;
+      ctx.lineTo(x + i * step, y - 8 + jitter);
+    }
+    ctx.lineTo(x + w + 10, y + h + 8);
+    for (let i = teeth; i >= 0; i--) {
+      const jitter = ((i * 23) % 8) - 4;
+      ctx.lineTo(x + i * step, y + h + 8 + jitter);
+    }
+    ctx.closePath();
+    ctx.fill();
+  }
+  ctx.fillStyle = fillColor;
+  ctx.beginPath();
+  ctx.moveTo(x, y);
+  for (let i = 0; i <= teeth; i++) {
+    const jitter = ((i * 13) % 7) - 3;
+    ctx.lineTo(x + i * step, y + jitter);
+  }
+  ctx.lineTo(x + w + 4, y + h / 2);
+  ctx.lineTo(x + w, y + h);
+  for (let i = teeth; i >= 0; i--) {
+    const jitter = ((i * 19) % 7) - 3;
+    ctx.lineTo(x + i * step, y + h + jitter);
+  }
+  ctx.lineTo(x - 4, y + h / 2);
+  ctx.closePath();
+  ctx.fill();
+  ctx.restore();
+}
+
+function drawHookBlock(ctx, W, H, scaleFactor, nowSec) {
+  const mainText = (state.hook.enabled && state.hook.text && state.hook.text.trim()) ? state.hook.text.trim() : "";
+  const subText = (state.hook.enabled && state.hook.line2 && state.hook.line2.trim()) ? state.hook.line2.trim() : "";
+  if (!mainText && !subText) return;
+
+  const baseHookSz = +($("hookSz")?.value) || 54;
+  const sz = Math.round(baseHookSz * scaleFactor);
+  const style = state.hook.style || "none";
+
+  if (style === "none" && !subText) {
+    drawStyledText(ctx, mainText, state.hook.x, state.hook.y, sz, state.hook, nowSec);
+    return;
+  }
+
+  ctx.save();
+  const cx = state.hook.x * W;
+  const cy = state.hook.y * H;
+  const boxW = Math.min(W * 0.88, Math.round(920 * scaleFactor));
+  const boxH = subText ? Math.round(sz * 2.55) : Math.round(sz * 1.65);
+  const bx = cx - boxW / 2;
+  const by = cy - boxH / 2;
+
+  if (style === "ripped") {
+    drawRippedBanner(ctx, bx, by, boxW, boxH, state.hook.bgColor || "#c80000", "#ffffff");
+  } else if (style === "box") {
+    ctx.fillStyle = state.hook.bgColor || "#c80000";
+    ctx.beginPath();
+    ctx.roundRect(bx, by, boxW, boxH, Math.round(14 * scaleFactor));
+    ctx.fill();
+  } else if (style === "notebook") {
+    drawRippedBanner(ctx, bx, by, boxW, boxH, "#f8fafc", "#cbd5e1");
+    ctx.strokeStyle = "#93c5fd";
+    ctx.lineWidth = Math.max(1.5, 2 * scaleFactor);
+    for (let ly = by + 20 * scaleFactor; ly < by + boxH - 10 * scaleFactor; ly += 22 * scaleFactor) {
+      ctx.beginPath();
+      ctx.moveTo(bx + 14 * scaleFactor, ly);
+      ctx.lineTo(bx + boxW - 14 * scaleFactor, ly);
+      ctx.stroke();
+    }
+  }
+
+  ctx.textAlign = "center";
+  ctx.textBaseline = "middle";
+  ctx.font = `900 ${sz}px '${state.hook.font}', system-ui, sans-serif`;
+  ctx.lineWidth = Math.max(4, sz * 0.14);
+  ctx.strokeStyle = "#000000";
+
+  if (subText) {
+    const y1 = cy - sz * 0.58;
+    const y2 = cy + sz * 0.58;
+    if (mainText) {
+      ctx.strokeText(mainText, cx, y1);
+      ctx.fillStyle = state.hook.color1 || state.hook.color || "#ffffff";
+      ctx.fillText(mainText, cx, y1);
+    }
+    ctx.strokeText(subText, cx, y2);
+    ctx.fillStyle = state.hook.color2 || "#ffd166";
+    ctx.fillText(subText, cx, y2);
+  } else {
+    ctx.strokeText(mainText, cx, cy);
+    ctx.fillStyle = state.hook.color1 || state.hook.color || "#ffffff";
+    ctx.fillText(mainText, cx, cy);
+  }
+  ctx.restore();
+}
+
+function drawSocialOverlay(ctx, W, H, scaleFactor) {
+  if (!state.social.enabled || !state.social.handle || !state.social.handle.trim()) return;
+  const handle = state.social.handle.trim();
+  const y = state.social.y * H;
+  const barH = Math.round(76 * scaleFactor);
+  const fontSz = Math.round(42 * scaleFactor);
+  const baseColor = state.social.color || "#b80000";
+
+  ctx.save();
+  if (state.social.style === "metallic") {
+    const grad = ctx.createLinearGradient(0, y - barH / 2, 0, y + barH / 2);
+    grad.addColorStop(0, baseColor);
+    grad.addColorStop(0.5, "#111827");
+    grad.addColorStop(1, baseColor);
+    ctx.fillStyle = grad;
+    ctx.fillRect(0, y - barH / 2, W, barH);
+  } else if (state.social.style === "neon") {
+    ctx.fillStyle = "rgba(8, 12, 10, 0.9)";
+    ctx.fillRect(0, y - barH / 2, W, barH);
+    ctx.strokeStyle = baseColor;
+    ctx.lineWidth = Math.max(3, 4 * scaleFactor);
+    ctx.strokeRect(0, y - barH / 2, W, barH);
+  } else {
+    const pillW = Math.min(W * 0.72, Math.round(760 * scaleFactor));
+    ctx.fillStyle = baseColor;
+    ctx.beginPath();
+    ctx.roundRect((W - pillW) / 2, y - barH / 2, pillW, barH, barH / 2);
+    ctx.fill();
+  }
+
+  const badgeMap = {
+    youtube: { lbl: "YT", bg: "#ff0000", fg: "#ffffff" },
+    instagram: { lbl: "IG", bg: "#dd2a7b", fg: "#ffffff" },
+    tiktok: { lbl: "TT", bg: "#00f2ea", fg: "#000000" },
+    kwai: { lbl: "KW", bg: "#ff6600", fg: "#ffffff" },
+    twitch: { lbl: "TW", bg: "#9146ff", fg: "#ffffff" },
+    kick: { lbl: "K", bg: "#53fc18", fg: "#000000" }
+  };
+  const b = badgeMap[state.social.platform] || badgeMap.youtube;
+
+  ctx.font = `900 ${fontSz}px '${state.capStyle.font}', system-ui, sans-serif`;
+  const textW = ctx.measureText(handle).width;
+  const badgeW = Math.round(68 * scaleFactor);
+  const gap = Math.round(16 * scaleFactor);
+  const startX = (W - (badgeW + gap + textW)) / 2;
+
+  ctx.fillStyle = b.bg;
+  ctx.beginPath();
+  ctx.roundRect(startX, y - badgeW * 0.36, badgeW, badgeW * 0.72, Math.round(12 * scaleFactor));
+  ctx.fill();
+
+  ctx.fillStyle = b.fg;
+  ctx.textAlign = "center";
+  ctx.textBaseline = "middle";
+  ctx.font = `900 ${Math.round(28 * scaleFactor)}px system-ui, sans-serif`;
+  ctx.fillText(b.lbl, startX + badgeW / 2, y);
+
+  ctx.textAlign = "left";
+  ctx.font = `900 ${fontSz}px '${state.capStyle.font}', system-ui, sans-serif`;
+  ctx.lineWidth = Math.max(3, fontSz * 0.12);
+  ctx.strokeStyle = "#000000";
+  ctx.strokeText(handle, startX + badgeW + gap, y);
+  ctx.fillStyle = "#ffffff";
+  ctx.fillText(handle, startX + badgeW + gap, y);
+  ctx.restore();
+}
+
+function drawHighlightedCaption(ctx, text, xNorm, yNorm, fontSize, styleObj, nowSec, highlightCsv) {
+  const wordsList = (highlightCsv || "").split(",").map(s => s.trim().toUpperCase()).filter(Boolean);
+  if (!wordsList.length) {
+    drawStyledText(ctx, text, xNorm, yNorm, fontSize, styleObj, nowSec);
+    return;
+  }
+  const W = ctx.canvas.width;
+  const H = ctx.canvas.height;
+  ctx.save();
+  ctx.translate(xNorm * W, yNorm * H);
+  ctx.font = `900 ${fontSize}px '${styleObj.font}', system-ui, sans-serif`;
+  ctx.textBaseline = "middle";
+  const tokens = text.trim().split(/\s+/);
+  const lines = [];
+  let cur = [];
+  tokens.forEach(tok => {
+    const test = [...cur, tok].join(" ");
+    if (ctx.measureText(test).width > W * 0.86 && cur.length) {
+      lines.push(cur);
+      cur = [tok];
+    } else {
+      cur.push(tok);
+    }
+  });
+  if (cur.length) lines.push(cur);
+  const lh = fontSize * 1.22;
+  lines.forEach((lineTokens, idx) => {
+    const ly = (idx - (lines.length - 1) / 2) * lh;
+    const full = lineTokens.join(" ");
+    const totalW = ctx.measureText(full).width;
+    let cx = -totalW / 2;
+    lineTokens.forEach(tok => {
+      const clean = tok.replace(/[^a-zA-Z0-9À-ÿ]/g, "").toUpperCase();
+      const isHi = wordsList.includes(clean);
+      ctx.lineWidth = Math.max(4, fontSize * 0.13);
+      ctx.strokeStyle = styleObj.bgColor || "#000000";
+      ctx.textAlign = "left";
+      ctx.strokeText(tok, cx, ly);
+      ctx.fillStyle = isHi ? "#ffd166" : (styleObj.color || "#ffffff");
+      ctx.fillText(tok, cx, ly);
+      cx += ctx.measureText(tok + " ").width;
+    });
+  });
+  ctx.restore();
+}
+
 function drawFrameToCanvas(videoEl, canvas, nowSec, showSplitGuide = false, clipOverride = null) {
   const ctx = canvas.getContext("2d");
   const W = canvas.width;
@@ -1685,16 +1918,14 @@ function drawFrameToCanvas(videoEl, canvas, nowSec, showSplitGuide = false, clip
     ? state.hook.text.trim()
     : "";
 
-  if (hookTitleText) {
-    const baseHookSz = +($("hookSz")?.value) || 54;
-    drawStyledText(ctx, hookTitleText, state.hook.x, state.hook.y, Math.round(baseHookSz * scaleFactor), state.hook, nowSec);
-  }
+  drawHookBlock(ctx, W, H, scaleFactor, nowSec);
+  drawSocialOverlay(ctx, W, H, scaleFactor);
 
   // Legenda ativa
   const activeCue = getActiveCaption(videoEl.currentTime || 0);
   if (activeCue && activeCue.text && activeCue.text.trim()) {
     const baseCapSz = +($("fontSz")?.value) || 48;
-    drawStyledText(ctx, activeCue.text, state.capStyle.x, state.capStyle.y, Math.round(baseCapSz * scaleFactor), state.capStyle, nowSec);
+    drawHighlightedCaption(ctx, activeCue.text, state.capStyle.x, state.capStyle.y, Math.round(baseCapSz * scaleFactor), state.capStyle, nowSec, state.highlightWords);
   }
 
   // Hashtags (#) gravadas no vídeo
@@ -2249,6 +2480,49 @@ window.addEventListener("DOMContentLoaded", () => {
   if ($("newVidBtn")) $("newVidBtn").onclick = resetToStep1;
   if ($("analyzeBtn")) $("analyzeBtn").onclick = analyzeMoments;
   if ($("exportBtn")) $("exportBtn").onclick = exportAndDownloadCurrent;
+  if ($("exportPngBtn")) {
+    $("exportPngBtn").onclick = () => {
+      const c = $("previewCanvas");
+      if (!c) return;
+      const a = document.createElement("a");
+      a.download = "clipfactory-frame.png";
+      a.href = c.toDataURL("image/png");
+      a.click();
+    };
+  }
+  if ($("highlightWords")) {
+    $("highlightWords").oninput = () => { state.highlightWords = $("highlightWords").value; };
+  }
+  if ($("hookLine2")) {
+    $("hookLine2").oninput = () => { state.hook.line2 = $("hookLine2").value; };
+  }
+  if ($("hookStyle")) {
+    $("hookStyle").onchange = () => { state.hook.style = $("hookStyle").value; };
+  }
+  if ($("hookBgColor")) {
+    $("hookBgColor").oninput = () => { state.hook.bgColor = $("hookBgColor").value; };
+  }
+  if ($("hookColor1")) {
+    $("hookColor1").oninput = () => { state.hook.color1 = $("hookColor1").value; };
+  }
+  if ($("hookColor2")) {
+    $("hookColor2").oninput = () => { state.hook.color2 = $("hookColor2").value; };
+  }
+  if ($("socialEnabled")) {
+    $("socialEnabled").onchange = () => { state.social.enabled = $("socialEnabled").checked; };
+  }
+  if ($("socialPlatform")) {
+    $("socialPlatform").onchange = () => { state.social.platform = $("socialPlatform").value; };
+  }
+  if ($("socialHandle")) {
+    $("socialHandle").oninput = () => { state.social.handle = $("socialHandle").value; };
+  }
+  if ($("socialBarStyle")) {
+    $("socialBarStyle").onchange = () => { state.social.style = $("socialBarStyle").value; };
+  }
+  if ($("socialBarColor")) {
+    $("socialBarColor").oninput = () => { state.social.color = $("socialBarColor").value; };
+  }
   setLayoutMode("split");
 
   const cardObs = new MutationObserver(() => initCollapsibleCards());

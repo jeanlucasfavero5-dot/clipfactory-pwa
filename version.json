@@ -1,5 +1,5 @@
 {
-  "version": "0.005",
+  "version": "0.009",
   "url": "./index.html",
-  "notes": "Fix export duration metadata (0:00), daily 20-clip quota deduction on download, vertical 9:16 live preview modal for clips, and captions/hooks disabled by default until typed or toggled."
+  "notes": "Opaque dark icon background with large CLIP + play badge above and FACTORY below."
 }

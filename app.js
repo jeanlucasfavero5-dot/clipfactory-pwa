@@ -84,10 +84,43 @@ function findFloat64Offset(bytes, targetMs) {
 function fixWebmBlobDuration(blob, durationSec) {
   return blob.arrayBuffer().then((buf) => {
     const bytes = new Uint8Array(buf);
+    const safeSec = Math.max(0.5, Number(durationSec) || 1);
+    const view = new DataView(bytes.buffer, bytes.byteOffset, bytes.byteLength);
+
+    // Default WebM TimestampScale is 1,000,000 ns (1 ms), so Duration in default units is milliseconds
+    let scaleNs = 1000000;
+    for (let i = 0; i < bytes.length - 6; i++) {
+      if (bytes[i] === 0x2A && bytes[i + 1] === 0xD7 && bytes[i + 2] === 0xB1) {
+        const sizeByte = bytes[i + 3];
+        if (sizeByte >= 0x81 && sizeByte <= 0x88) {
+          const byteLen = sizeByte & 0x0F;
+          if (i + 4 + byteLen <= bytes.length) {
+            let val = 0;
+            for (let b = 0; b < byteLen; b++) {
+              val = (val * 256) + bytes[i + 4 + b];
+            }
+            if (val > 0) scaleNs = val;
+          }
+        }
+        break;
+      }
+    }
+
+    const durationUnits = (safeSec * 1e9) / scaleNs;
     const durOffset = findFloat64Offset(bytes);
     if (durOffset !== -1 && durOffset + 8 <= bytes.length) {
-      const view = new DataView(bytes.buffer, bytes.byteOffset, bytes.byteLength);
-      view.setFloat64(durOffset, Math.max(0.1, Number(durationSec) || 1), false);
+      view.setFloat64(durOffset, durationUnits, false);
+    } else {
+      // Fallback: search for any float64 near 0 or NaN inside Segment Info (0x15 0x49 0xA9 0x66)
+      for (let i = 0; i < Math.min(bytes.length - 12, 8192); i++) {
+        if (bytes[i] === 0x44 && bytes[i + 1] === 0x89) {
+          const sz = bytes[i + 2];
+          if (sz === 0x84 && i + 7 <= bytes.length) {
+            view.setFloat32(i + 3, durationUnits, false);
+            break;
+          }
+        }
+      }
     }
     return new Blob([bytes], { type: blob.type || "video/webm" });
   }).catch(() => blob);
@@ -1262,13 +1295,58 @@ async function exportVerticalCut(opts = {}) {
     recorder.start(250);
     await videoEl.play().catch(() => {});
 
-    const frameDelay = Math.max(33, Math.floor(1000 / spec.fps));
-
-    while (!videoEl.paused && !videoEl.ended && videoEl.currentTime < endSec) {
+    let lastUiUpdate = 0;
+    const stepFrame = () => {
+      if (videoEl.paused || videoEl.ended || videoEl.currentTime >= endSec) return;
       drawFrameToCanvas(videoEl, offCanvas, videoEl.currentTime, false);
-      const pct = 10 + clamp(((videoEl.currentTime - startSec) / actualDurationSec) * 82, 0, 82);
-      setExportLog(`Renderizando ${fmt(videoEl.currentTime)} / ${fmt(endSec)}...`, pct);
-      await new Promise(r => setTimeout(r, frameDelay));
+      const nowMs = performance.now();
+      if (nowMs - lastUiUpdate > 160) {
+        lastUiUpdate = nowMs;
+        const pct = 10 + clamp(((videoEl.currentTime - startSec) / actualDurationSec) * 82, 0, 82);
+        setExportLog(`Renderizando ${fmt(videoEl.currentTime)} / ${fmt(endSec)}...`, pct);
+      }
+    };
+
+    if (typeof videoEl.requestVideoFrameCallback === "function") {
+      await new Promise((resolve) => {
+        let finished = false;
+        const finish = () => {
+          if (finished) return;
+          finished = true;
+          resolve();
+        };
+        const onFrame = () => {
+          if (finished || videoEl.paused || videoEl.ended || videoEl.currentTime >= endSec) {
+            finish();
+            return;
+          }
+          stepFrame();
+          videoEl.requestVideoFrameCallback(onFrame);
+        };
+        videoEl.requestVideoFrameCallback(onFrame);
+        videoEl.addEventListener("ended", finish, { once: true });
+        setTimeout(finish, Math.ceil((actualDurationSec + 2) * 1000));
+      });
+    } else {
+      await new Promise((resolve) => {
+        let finished = false;
+        const finish = () => {
+          if (finished) return;
+          finished = true;
+          resolve();
+        };
+        const tick = () => {
+          if (finished || videoEl.paused || videoEl.ended || videoEl.currentTime >= endSec) {
+            finish();
+            return;
+          }
+          stepFrame();
+          requestAnimationFrame(tick);
+        };
+        requestAnimationFrame(tick);
+        videoEl.addEventListener("ended", finish, { once: true });
+        setTimeout(finish, Math.ceil((actualDurationSec + 2) * 1000));
+      });
     }
 
     videoEl.pause();

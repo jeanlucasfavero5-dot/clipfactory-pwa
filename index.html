@@ -2,106 +2,1168 @@
 <html lang="pt-BR">
 <head>
 <meta charset="UTF-8">
-<meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
-<meta name="theme-color" content="#07140e">
-<link rel="manifest" href="./manifest.json">
-<link rel="icon" href="./icon-192.png">
-<title>ClipFactory — Carregando</title>
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>ClipForge Studio — Editor de Clipes & Shorts</title>
+<link href="https://fonts.googleapis.com/css2?family=Anton&family=Bangers&family=Bebas+Neue&family=Black+Ops+One&family=Montserrat:ital,wght@0,700;0,900;1,900&family=Oswald:wght@700&family=Poppins:wght@700;900&family=Rubik+Wet+Paint&display=swap" rel="stylesheet">
 <style>
-  * { box-sizing: border-box; margin: 0; padding: 0; }
-  html, body {
-    width: 100%;
-    height: 100%;
-    overflow: hidden;
-    background: #030705;
-    font-family: system-ui, -apple-system, Segoe UI, Roboto, sans-serif;
+  :root {
+    --bg: #070b09;
+    --panel: #0d1612;
+    --border: #1b3829;
+    --accent: #00ff7f;
+    --accent-dim: #00b359;
+    --text: #e6f5ed;
+    --muted: #7da18e;
   }
-  .splash-wrap {
-    position: relative;
+  * { box-sizing: border-box; margin: 0; padding: 0; }
+  body {
+    background: var(--bg);
+    color: var(--text);
+    font-family: 'Montserrat', sans-serif;
+    display: flex;
+    height: 100vh;
+    overflow: hidden;
+  }
+  /* Sidebar */
+  .sidebar {
+    width: 430px;
+    background: var(--panel);
+    border-right: 1px solid var(--border);
+    display: flex;
+    flex-direction: column;
+    overflow-y: auto;
+    padding: 16px;
+    gap: 12px;
+  }
+  .sidebar::-webkit-scrollbar { width: 6px; }
+  .sidebar::-webkit-scrollbar-thumb { background: var(--border); border-radius: 3px; }
+  .brand {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    padding-bottom: 10px;
+    border-bottom: 1px solid var(--border);
+  }
+  .brand h1 {
+    font-size: 18px;
+    font-weight: 900;
+    letter-spacing: 1px;
+    color: var(--accent);
+  }
+  .brand span {
+    font-size: 11px;
+    background: #13291e;
+    color: var(--accent);
+    padding: 3px 8px;
+    border-radius: 99px;
+    border: 1px solid var(--border);
+  }
+
+  /* Accordion */
+  .acc-item {
+    border: 1px solid var(--border);
+    border-radius: 14px;
+    background: #0a120e;
+    overflow: hidden;
+  }
+  .acc-header {
+    padding: 14px 16px;
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    cursor: pointer;
+    font-size: 13px;
+    font-weight: 900;
+    letter-spacing: 0.8px;
+    color: var(--accent);
+    user-select: none;
+    transition: background 0.2s;
+  }
+  .acc-header:hover { background: #101f18; }
+  .acc-arrow {
+    width: 24px;
+    height: 24px;
+    border: 1px solid var(--border);
+    border-radius: 6px;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    font-size: 10px;
+    transition: transform 0.2s;
+  }
+  .acc-item.open .acc-arrow { transform: rotate(90deg); }
+  .acc-body {
+    display: none;
+    padding: 14px 16px;
+    border-top: 1px solid var(--border);
+    flex-direction: column;
+    gap: 12px;
+  }
+  .acc-item.open .acc-body { display: flex; }
+
+  label {
+    font-size: 11px;
+    font-weight: 700;
+    color: var(--muted);
+    text-transform: uppercase;
+    letter-spacing: 0.5px;
+    display: block;
+    margin-bottom: 5px;
+  }
+  input[type="text"], textarea, select {
     width: 100%;
-    height: 100%;
-    background: url("./splash-bg.jpg") center center / cover no-repeat;
+    background: #060a08;
+    border: 1px solid var(--border);
+    color: var(--text);
+    padding: 9px 11px;
+    border-radius: 8px;
+    font-family: inherit;
+    font-size: 13px;
+    outline: none;
+  }
+  input[type="text"]:focus, textarea:focus, select:focus {
+    border-color: var(--accent);
+  }
+  input[type="file"] {
+    font-size: 12px;
+    color: var(--muted);
+  }
+  input[type="range"] {
+    width: 100%;
+    accent-color: var(--accent);
+  }
+  .row {
+    display: flex;
+    gap: 10px;
+    align-items: center;
+  }
+  .col { flex: 1; }
+
+  /* Custom Color Picker Panel (inspirado no print) */
+  .color-studio {
+    background: #060a08;
+    border: 1px solid var(--border);
+    border-radius: 10px;
+    padding: 10px;
+    display: flex;
+    flex-direction: column;
+    gap: 8px;
+  }
+  .sv-box {
+    width: 100%;
+    height: 110px;
+    border-radius: 8px;
+    position: relative;
+    cursor: crosshair;
+    background: linear-gradient(to top, #000, transparent), linear-gradient(to right, #fff, hsl(0, 100%, 50%));
+    border: 1px solid #222;
+  }
+  .sv-cursor {
+    width: 14px;
+    height: 14px;
+    border: 2px solid #fff;
+    border-radius: 50%;
+    box-shadow: 0 0 4px #000;
+    position: absolute;
+    transform: translate(-50%, -50%);
+    pointer-events: none;
+    top: 0%;
+    left: 100%;
+  }
+  .hue-row {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+  }
+  .hue-slider {
+    -webkit-appearance: none;
+    flex: 1;
+    height: 12px;
+    border-radius: 99px;
+    background: linear-gradient(to right, #ff0000 0%, #ffff00 17%, #00ff00 33%, #00ffff 50%, #0000ff 67%, #ff00ff 83%, #ff0000 100%);
+    outline: none;
+    cursor: pointer;
+  }
+  .hue-slider::-webkit-slider-thumb {
+    -webkit-appearance: none;
+    width: 16px;
+    height: 16px;
+    border-radius: 50%;
+    background: #fff;
+    border: 2px solid #111;
+    box-shadow: 0 0 4px rgba(0,0,0,0.8);
+  }
+  .swatches {
+    display: flex;
+    gap: 6px;
+    flex-wrap: wrap;
+  }
+  .swatch {
+    width: 22px;
+    height: 22px;
+    border-radius: 6px;
+    border: 1px solid rgba(255,255,255,0.25);
+    cursor: pointer;
+  }
+  .hex-badge {
+    font-family: monospace;
+    font-size: 12px;
+    background: #101c16;
+    padding: 4px 8px;
+    border-radius: 6px;
+    border: 1px solid var(--border);
+    color: #fff;
+  }
+
+  /* Presets Grid */
+  .preset-grid {
+    display: grid;
+    grid-template-columns: repeat(3, 1fr);
+    gap: 8px;
+    max-height: 280px;
+    overflow-y: auto;
+    padding-right: 4px;
+  }
+  .preset-card {
+    background: #232323;
+    border: 2px solid transparent;
+    border-radius: 8px;
+    height: 62px;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    cursor: pointer;
+    font-size: 18px;
+    font-weight: 900;
+    transition: transform 0.12s, border-color 0.12s;
+    overflow: hidden;
+    position: relative;
+  }
+  .preset-card:hover { transform: scale(1.03); }
+  .preset-card.active { border-color: var(--accent); box-shadow: 0 0 10px rgba(0,255,127,0.3); }
+
+  .btn {
+    background: var(--accent);
+    color: #03140b;
+    border: none;
+    padding: 11px 14px;
+    border-radius: 10px;
+    font-weight: 900;
+    font-size: 13px;
+    cursor: pointer;
+    text-transform: uppercase;
+    letter-spacing: 0.6px;
+    transition: opacity 0.2s;
+  }
+  .btn:hover { opacity: 0.9; }
+  .btn-sec {
+    background: #13261d;
+    color: var(--accent);
+    border: 1px solid var(--border);
+  }
+
+  /* Workspace Preview */
+  .workspace {
+    flex: 1;
     display: flex;
     flex-direction: column;
     align-items: center;
-    justify-content: flex-end;
-    padding: 36px 24px 54px;
-  }
-  .splash-vignette {
-    position: absolute;
-    inset: 0;
-    background: radial-gradient(circle at center, rgba(3,7,5,0.18) 0%, rgba(3,7,5,0.72) 100%);
-    pointer-events: none;
-  }
-  .splash-ui {
+    justify-content: center;
+    background: radial-gradient(circle at center, #0e1a14 0%, #050806 100%);
+    padding: 20px;
     position: relative;
-    z-index: 2;
-    width: 100%;
-    max-width: 340px;
-    text-align: center;
-    color: #e9fff2;
   }
-  .splash-pill {
-    display: inline-flex;
-    align-items: center;
-    gap: 8px;
-    padding: 8px 16px;
-    border-radius: 999px;
-    background: rgba(7, 20, 14, 0.85);
-    border: 1px solid rgba(74, 222, 128, 0.45);
-    font-size: 13px;
-    font-weight: 700;
-    letter-spacing: 0.4px;
-    box-shadow: 0 8px 28px rgba(0,0,0,0.65);
-  }
-  .dot {
-    width: 9px;
-    height: 9px;
-    border-radius: 50%;
-    background: #4ade80;
-    box-shadow: 0 0 12px #4ade80;
-    animation: pulse 1s infinite alternate;
-  }
-  .bar {
-    margin-top: 14px;
-    width: 100%;
-    height: 5px;
-    border-radius: 999px;
-    background: rgba(255,255,255,0.16);
+  .canvas-wrap {
+    position: relative;
+    box-shadow: 0 20px 60px rgba(0,0,0,0.85);
+    border: 1px solid var(--border);
+    border-radius: 12px;
     overflow: hidden;
+    background: #000;
+    max-height: 82vh;
+    aspect-ratio: 9 / 16;
   }
-  .bar-fill {
-    width: 0%;
+  canvas {
+    width: 100%;
     height: 100%;
-    background: linear-gradient(90deg, #22c55e, #4ade80, #ffd166);
-    animation: load2s 2s linear forwards;
+    display: block;
+    cursor: grab;
   }
-  @keyframes load2s {
-    from { width: 0%; }
-    to { width: 100%; }
+  canvas:active { cursor: grabbing; }
+  .transport {
+    margin-top: 12px;
+    display: flex;
+    gap: 10px;
+    align-items: center;
   }
-  @keyframes pulse {
-    from { transform: scale(0.85); opacity: 0.65; }
-    to { transform: scale(1.2); opacity: 1; }
+  .hint {
+    font-size: 11px;
+    color: var(--muted);
+    margin-top: 6px;
   }
 </style>
 </head>
 <body>
-  <div class="splash-wrap">
-    <div class="splash-vignette"></div>
-    <div class="splash-ui">
-      <div class="splash-pill"><span class="dot"></span><span>CLIPFACTORY v0.019 · INICIANDO</span></div>
-      <div class="bar"><div class="bar-fill"></div></div>
+
+<div class="sidebar">
+  <div class="brand">
+    <h1>CLIPFORGE STUDIO</h1>
+    <span>PRO v2.0</span>
+  </div>
+
+  <!-- 1. MÍDIA & LAYOUT SPLIT -->
+  <div class="acc-item open">
+    <div class="acc-header" onclick="toggleAcc(this)">
+      <span>1. VÍDEO & LAYOUT CLIPADA (9:16)</span>
+      <div class="acc-arrow">▶</div>
+    </div>
+    <div class="acc-body">
+      <div>
+        <label>Vídeo Principal (Gameplay / Corte)</label>
+        <input type="file" id="mainVideoInput" accept="video/*">
+      </div>
+      <div>
+        <label>Câmera / Reação (Split Topo Opcional)</label>
+        <input type="file" id="camVideoInput" accept="video/*">
+      </div>
+      <div class="row">
+        <div class="col">
+          <label>Modo de Tela</label>
+          <select id="layoutMode" onchange="renderFrame()">
+            <option value="single">Tela Cheia (9:16)</option>
+            <option value="split">Split Clipada (Cam Topo + Jogo)</option>
+          </select>
+        </div>
+        <div class="col">
+          <label>Divisão Cam (%)</label>
+          <input type="range" id="splitRatio" min="25" max="55" value="38" oninput="renderFrame()">
+        </div>
+      </div>
     </div>
   </div>
-  <script>
-    if ("serviceWorker" in navigator) {
-      navigator.serviceWorker.register("./sw.js").catch(() => {});
+
+  <!-- 2. LEGENDA — ESTILO VIRAL (55+ PRESETS) -->
+  <div class="acc-item open">
+    <div class="acc-header" onclick="toggleAcc(this)">
+      <span>2. LEGENDA — ESTILO VIRAL (55+ PRESETS)</span>
+      <div class="acc-arrow">▶</div>
+    </div>
+    <div class="acc-body">
+      <div>
+        <label>Texto da Legenda Dinâmica</label>
+        <textarea id="captionText" rows="2" oninput="renderFrame()">PEDI DEMISSÃO DO EMPREGO só pra JOGAR E ZERAR GTA 6</textarea>
+      </div>
+      <div class="row">
+        <div class="col">
+          <label>Fonte</label>
+          <select id="captionFont" onchange="renderFrame()">
+            <option value="'Anton', sans-serif">Anton Impact</option>
+            <option value="'Montserrat', sans-serif">Montserrat Black</option>
+            <option value="'Bebas Neue', sans-serif">Bebas Neue</option>
+            <option value="'Bangers', cursive">Bangers Comic</option>
+            <option value="'Black Ops One', cursive">Black Ops Gamer</option>
+            <option value="'Oswald', sans-serif">Oswald Bold</option>
+          </select>
+        </div>
+        <div class="col">
+          <label>Tamanho</label>
+          <input type="range" id="captionSize" min="32" max="110" value="56" oninput="renderFrame()">
+        </div>
+      </div>
+
+      <label>Presets de Estilo (Art / Neon / Papel Rasgado / Contorno)</label>
+      <div class="preset-grid" id="captionPresetsGrid"></div>
+
+      <!-- Painel Personalizável de Cor (Letras / Fundo / Contorno) -->
+      <div>
+        <label>Painel de Cor Personalizável (Alvo)</label>
+        <div class="row" style="margin-bottom:6px;">
+          <select id="colorTarget" onchange="syncPickerFromTarget()">
+            <option value="capText">Cor da Letra (Legenda)</option>
+            <option value="capHighlight">Cor Palavra Destaque (Amarelo/Vermelho)</option>
+            <option value="capBg">Cor do Fundo / Faixa Legenda</option>
+            <option value="capStroke">Cor da Borda / Brilho</option>
+          </select>
+          <span class="hex-badge" id="hexDisplay">#FFFFFF</span>
+        </div>
+        <div class="color-studio">
+          <div class="sv-box" id="svBox">
+            <div class="sv-cursor" id="svCursor"></div>
+          </div>
+          <div class="hue-row">
+            <input type="range" min="0" max="360" value="0" class="hue-slider" id="hueSlider">
+          </div>
+          <div class="swatches">
+            <div class="swatch" style="background:#FFFFFF" onclick="applyQuickHex('#FFFFFF')"></div>
+            <div class="swatch" style="background:#FFE600" onclick="applyQuickHex('#FFE600')"></div>
+            <div class="swatch" style="background:#FF0000" onclick="applyQuickHex('#FF0000')"></div>
+            <div class="swatch" style="background:#D90429" onclick="applyQuickHex('#D90429')"></div>
+            <div class="swatch" style="background:#00FF7F" onclick="applyQuickHex('#00FF7F')"></div>
+            <div class="swatch" style="background:#00E5FF" onclick="applyQuickHex('#00E5FF')"></div>
+            <div class="swatch" style="background:#FF6B00" onclick="applyQuickHex('#FF6B00')"></div>
+            <div class="swatch" style="background:#000000" onclick="applyQuickHex('#000000')"></div>
+          </div>
+        </div>
+      </div>
+
+      <div class="row">
+        <div class="col">
+          <label>Posição Y (%)</label>
+          <input type="range" id="captionY" min="10" max="92" value="74" oninput="renderFrame()">
+        </div>
+        <div class="col">
+          <label>Palavras em Destaque (índice)</label>
+          <input type="text" id="highlightWords" value="JOGAR,GTA,6" oninput="renderFrame()">
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <!-- 3. GANCHO / TÍTULO VISUAL & FAIXA RASGADA -->
+  <div class="acc-item open">
+    <div class="acc-header" onclick="toggleAcc(this)">
+      <span>3. GANCHO / TÍTULO VISUAL (FAIXA CLIPADA)</span>
+      <div class="acc-arrow">▶</div>
+    </div>
+    <div class="acc-body">
+      <div class="row">
+        <input type="checkbox" id="hookEnabled" checked onchange="renderFrame()">
+        <label style="margin:0;">Ativar Faixa de Gancho / Título</label>
+      </div>
+      <div>
+        <label>Texto Linha 1 (Branco)</label>
+        <input type="text" id="hookLine1" value="OLHA OS GRÁFICOS DESSE" oninput="renderFrame()">
+      </div>
+      <div>
+        <label>Texto Linha 2 (Destaque Amarelo/Cor)</label>
+        <input type="text" id="hookLine2" value="JOGO MOBILE BRASILEIRO" oninput="renderFrame()">
+      </div>
+      <div class="row">
+        <div class="col">
+          <label>Estilo da Faixa</label>
+          <select id="hookStyle" onchange="renderFrame()">
+            <option value="ripped-red">Papel Rasgado Vermelho + Borda Branca</option>
+            <option value="ripped-yellow">Papel Rasgado Amarelo + Borda Preta</option>
+            <option value="ripped-black">Papel Rasgado Preto Grunge</option>
+            <option value="box-red">Caixa Sólida Vermelha (Estilo Corte)</option>
+            <option value="box-yellow">Caixa Sólida Amarela</option>
+            <option value="notebook">Folha de Caderno Rasgada</option>
+          </select>
+        </div>
+        <div class="col">
+          <label>Cor Fundo Faixa</label>
+          <input type="color" id="hookBgColor" value="#C80000" onchange="renderFrame()" style="width:100%;height:36px;border:none;background:none;">
+        </div>
+      </div>
+      <div class="row">
+        <div class="col">
+          <label>Cor Linha 1</label>
+          <input type="color" id="hookColor1" value="#FFFFFF" onchange="renderFrame()" style="width:100%;height:34px;border:none;background:none;">
+        </div>
+        <div class="col">
+          <label>Cor Linha 2</label>
+          <input type="color" id="hookColor2" value="#FFE600" onchange="renderFrame()" style="width:100%;height:34px;border:none;background:none;">
+        </div>
+        <div class="col">
+          <label>Posição Y (%)</label>
+          <input type="range" id="hookY" min="8" max="85" value="37" oninput="renderFrame()">
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <!-- 4. BARRINHA SOCIAL & @ PERSONALIZÁVEL -->
+  <div class="acc-item open">
+    <div class="acc-header" onclick="toggleAcc(this)">
+      <span>4. BARRINHA SOCIAL & @ PERSONALIZÁVEL</span>
+      <div class="acc-arrow">▶</div>
+    </div>
+    <div class="acc-body">
+      <div class="row">
+        <input type="checkbox" id="socialEnabled" checked onchange="renderFrame()">
+        <label style="margin:0;">Exibir Barrinha de Rede Social</label>
+      </div>
+      <div class="row">
+        <div class="col">
+          <label>Plataforma / Ícone</label>
+          <select id="socialPlatform" onchange="renderFrame()">
+            <option value="youtube">YouTube (Play Vermelho)</option>
+            <option value="instagram">Instagram (Gradiente)</option>
+            <option value="tiktok">TikTok (Neon)</option>
+            <option value="kwai">Kwai (Laranja)</option>
+            <option value="twitch">Twitch (Roxo)</option>
+            <option value="kick">Kick (Verde Neon)</option>
+          </select>
+        </div>
+        <div class="col">
+          <label>Seu @ Personalizado</label>
+          <input type="text" id="socialHandle" value="@CapudoOficial" oninput="renderFrame()">
+        </div>
+      </div>
+      <div class="row">
+        <div class="col">
+          <label>Estilo da Barrinha</label>
+          <select id="socialBarStyle" onchange="renderFrame()">
+            <option value="metallic-red">Faixa Metálica Vermelha (3D)</option>
+            <option value="metallic-yellow">Faixa Metálica Amarela/Ouro</option>
+            <option value="dark-neon">Barra Escura + Brilho Neon</option>
+            <option value="pill-clean">Pílula Flutuante Minimal</option>
+          </select>
+        </div>
+        <div class="col">
+          <label>Cor da Barra</label>
+          <input type="color" id="socialBarColor" value="#B80000" onchange="renderFrame()" style="width:100%;height:36px;border:none;background:none;">
+        </div>
+      </div>
+      <div>
+        <label>Posição Y da Barrinha (%)</label>
+        <input type="range" id="socialY" min="5" max="95" value="52" oninput="renderFrame()">
+      </div>
+    </div>
+  </div>
+
+  <!-- 5. EXPORTAR -->
+  <div class="acc-item open">
+    <div class="acc-header" onclick="toggleAcc(this)">
+      <span>5. EXPORTAR CLIPADA</span>
+      <div class="acc-arrow">▶</div>
+    </div>
+    <div class="acc-body">
+      <button class="btn" onclick="exportVideo()">Renderizar & Baixar Vídeo (.WEBM)</button>
+      <button class="btn btn-sec" onclick="exportFramePNG()">Baixar Frame / Thumbnail (.PNG)</button>
+      <div id="exportStatus" style="font-size:12px;color:var(--accent);"></div>
+    </div>
+  </div>
+</div>
+
+<div class="workspace">
+  <div class="canvas-wrap">
+    <canvas id="stage" width="1080" height="1920"></canvas>
+  </div>
+  <div class="transport">
+    <button class="btn btn-sec" onclick="togglePlay()">▶ Play / Pause</button>
+    <button class="btn btn-sec" onclick="resetPositions()">Centralizar Elementos</button>
+  </div>
+  <div class="hint">Arraste diretamente no preview para reposicionar a Legenda, a Faixa de Gancho ou a Barrinha Social.</div>
+</div>
+
+<script>
+const canvas = document.getElementById('stage');
+const ctx = canvas.getContext('2d');
+
+const mainVideo = document.createElement('video');
+mainVideo.crossOrigin = 'anonymous';
+mainVideo.loop = true;
+mainVideo.muted = false;
+
+const camVideo = document.createElement('video');
+camVideo.crossOrigin = 'anonymous';
+camVideo.loop = true;
+camVideo.muted = true;
+
+// Estado de cores personalizáveis
+const colors = {
+  capText: '#FFFFFF',
+  capHighlight: '#FFE600',
+  capBg: '#D90429',
+  capStroke: '#000000'
+};
+
+// 56 Presets inspirados nas referências visuais (sem nomes de terceiros)
+const PRESETS = [
+  { id: 'viral-red-box', name: 'Faixa Vermelha', text: '#FFFFFF', bg: '#E60000', stroke: '#000000', glow: 'transparent', mode: 'box' },
+  { id: 'viral-yellow-box', name: 'Faixa Amarela', text: '#000000', bg: '#FFE600', stroke: 'transparent', glow: 'transparent', mode: 'box' },
+  { id: 'neon-red-double', name: 'Neon Duplo', text: '#FFFFFF', bg: 'transparent', stroke: '#FF0000', glow: '#FF0000', mode: 'neon' },
+  { id: '3d-red-black', name: '3D Vermelho', text: '#0A0A0A', bg: 'transparent', stroke: '#FFFFFF', glow: '#FF0000', mode: '3d' },
+  { id: 'yellow-fire', name: 'Amarelo Fogo', text: '#FFE600', bg: 'transparent', stroke: '#FF0000', glow: '#FF4500', mode: 'neon' },
+  { id: 'white-red-aura', name: 'Aura Carmim', text: '#FFFFFF', bg: 'transparent', stroke: '#1A0000', glow: '#FF0000', mode: 'aura' },
+  { id: 'ripped-red-pill', name: 'Rasgado Vermelho', text: '#FFFFFF', bg: '#C80000', stroke: '#000000', glow: 'transparent', mode: 'ripped' },
+  { id: 'ripped-yellow-pill', name: 'Rasgado Amarelo', text: '#FFFFFF', bg: '#E5B800', stroke: '#000000', glow: 'transparent', mode: 'ripped' },
+  { id: 'notebook-paper', name: 'Caderno Escolar', text: '#D9383A', bg: '#F4F6F9', stroke: '#FFFFFF', glow: 'transparent', mode: 'notebook' },
+  { id: 'chrome-red', name: 'Cromado Rubi', text: '#FF1E1E', bg: 'transparent', stroke: '#C0C0C0', glow: '#000000', mode: 'chrome' },
+  { id: 'sticker-white', name: 'Adesivo Branco', text: '#FF1E1E', bg: 'transparent', stroke: '#FFFFFF', glow: '#7BAFD4', mode: 'sticker' },
+  { id: 'gold-luxury', name: 'Ouro Luxury', text: '#F59E0B', bg: 'transparent', stroke: '#FFFBEB', glow: '#B45309', mode: 'neon' },
+  { id: 'toxic-green', name: 'Verde Clipada', text: '#00FF7F', bg: 'transparent', stroke: '#000000', glow: '#00FF7F', mode: 'neon' },
+  { id: 'cyber-cyan', name: 'Ciano Cyber', text: '#00F0FF', bg: 'transparent', stroke: '#001F3F', glow: '#00F0FF', mode: 'neon' },
+  { id: 'grunge-black', name: 'Grunge Preto', text: '#FF1E1E', bg: '#0A0A0A', stroke: '#FFFFFF', glow: 'transparent', mode: 'ripped' },
+  { id: 'comic-cloud', name: 'Nuvem HQ', text: '#FF0000', bg: '#FFFFFF', stroke: '#000000', glow: 'transparent', mode: 'cloud' }
+];
+
+// Gerar até 56 variações combinando paletas
+const extraColors = [
+  ['#FFFFFF', '#FF0000', '#000000'],
+  ['#FFE600', '#000000', '#FF0000'],
+  ['#FF2A85', '#FFFFFF', '#2B0014'],
+  ['#00FF7F', '#052E16', '#000000'],
+  ['#FF6B00', '#FFFFFF', '#1F0D00'],
+  ['#A855F7', '#FFFFFF', '#1E0636'],
+  ['#38BDF8', '#082F49', '#FFFFFF'],
+  ['#F43F5E', '#FFF1F2', '#881337']
+];
+let idx = 1;
+while (PRESETS.length < 56) {
+  const pal = extraColors[idx % extraColors.length];
+  const modes = ['box', 'neon', 'ripped', 'aura', 'sticker'];
+  const m = modes[idx % modes.length];
+  PRESETS.push({
+    id: 'preset-' + idx,
+    name: 'Estilo #' + (PRESETS.length + 1),
+    text: pal[0],
+    bg: m === 'box' || m === 'ripped' ? pal[1] : 'transparent',
+    stroke: pal[2],
+    glow: pal[1],
+    mode: m
+  });
+  idx++;
+}
+
+let activePreset = PRESETS[0];
+
+// Popular grade de presets
+const grid = document.getElementById('captionPresetsGrid');
+PRESETS.forEach((p, i) => {
+  const card = document.createElement('div');
+  card.className = 'preset-card' + (i === 0 ? ' active' : '');
+  card.title = p.name;
+  card.innerHTML = `<span style="
+    color:${p.text};
+    background:${p.bg !== 'transparent' ? p.bg : 'transparent'};
+    padding:${p.bg !== 'transparent' ? '2px 8px' : '0'};
+    border-radius:4px;
+    -webkit-text-stroke: 1px ${p.stroke};
+    text-shadow: 0 0 8px ${p.glow};
+    font-family:'Anton',sans-serif;
+  ">ART</span>`;
+  card.onclick = () => {
+    document.querySelectorAll('.preset-card').forEach(c => c.classList.remove('active'));
+    card.classList.add('active');
+    activePreset = p;
+    colors.capText = p.text;
+    if (p.bg !== 'transparent') colors.capBg = p.bg;
+    colors.capStroke = p.stroke;
+    syncPickerFromTarget();
+    renderFrame();
+  };
+  grid.appendChild(card);
+});
+
+// Color Studio Interativo (SV + Hue)
+let currentHue = 0, currentSat = 0, currentVal = 100;
+const svBox = document.getElementById('svBox');
+const svCursor = document.getElementById('svCursor');
+const hueSlider = document.getElementById('hueSlider');
+
+function hsvToHex(h, s, v) {
+  s /= 100; v /= 100;
+  const k = n => (n + h / 60) % 6;
+  const f = n => v - v * s * Math.max(0, Math.min(k(n), 4 - k(n), 1));
+  const toHex = x => Math.round(x * 255).toString(16).padStart(2, '0').toUpperCase();
+  return `#${toHex(f(5))}${toHex(f(3))}${toHex(f(1))}`;
+}
+
+function updateColorFromPicker() {
+  svBox.style.background = `linear-gradient(to top, #000, transparent), linear-gradient(to right, #fff, hsl(${currentHue}, 100%, 50%))`;
+  const hex = hsvToHex(currentHue, currentSat, currentVal);
+  document.getElementById('hexDisplay').textContent = hex;
+  const target = document.getElementById('colorTarget').value;
+  colors[target] = hex;
+  renderFrame();
+}
+
+function applyQuickHex(hex) {
+  document.getElementById('hexDisplay').textContent = hex;
+  const target = document.getElementById('colorTarget').value;
+  colors[target] = hex;
+  renderFrame();
+}
+
+function syncPickerFromTarget() {
+  const target = document.getElementById('colorTarget').value;
+  document.getElementById('hexDisplay').textContent = colors[target];
+}
+
+let draggingSV = false;
+function handleSV(e) {
+  const rect = svBox.getBoundingClientRect();
+  const x = Math.max(0, Math.min(e.clientX - rect.left, rect.width));
+  const y = Math.max(0, Math.min(e.clientY - rect.top, rect.height));
+  currentSat = (x / rect.width) * 100;
+  currentVal = 100 - (y / rect.height) * 100;
+  svCursor.style.left = `${(x / rect.width) * 100}%`;
+  svCursor.style.top = `${(y / rect.height) * 100}%`;
+  updateColorFromPicker();
+}
+svBox.addEventListener('mousedown', e => { draggingSV = true; handleSV(e); });
+window.addEventListener('mousemove', e => { if (draggingSV) handleSV(e); });
+window.addEventListener('mouseup', () => { draggingSV = false; });
+hueSlider.addEventListener('input', e => {
+  currentHue = parseFloat(e.target.value);
+  updateColorFromPicker();
+});
+
+// Upload de vídeos
+document.getElementById('mainVideoInput').onchange = e => {
+  const file = e.target.files[0];
+  if (file) {
+    mainVideo.src = URL.createObjectURL(file);
+    mainVideo.play();
+  }
+};
+document.getElementById('camVideoInput').onchange = e => {
+  const file = e.target.files[0];
+  if (file) {
+    camVideo.src = URL.createObjectURL(file);
+    camVideo.play();
+    document.getElementById('layoutMode').value = 'split';
+  }
+};
+
+function toggleAcc(el) {
+  el.parentElement.classList.toggle('open');
+}
+
+function togglePlay() {
+  if (mainVideo.paused) {
+    mainVideo.play();
+    if (camVideo.src) camVideo.play();
+  } else {
+    mainVideo.pause();
+    camVideo.pause();
+  }
+}
+
+function resetPositions() {
+  document.getElementById('captionY').value = 74;
+  document.getElementById('hookY').value = 37;
+  document.getElementById('socialY').value = 52;
+  renderFrame();
+}
+
+// Desenho de papel rasgado (Ripped Paper Banner)
+function drawRippedBanner(x, y, w, h, fillColor, borderColor) {
+  ctx.save();
+  const teeth = 28;
+  const step = w / teeth;
+
+  // Borda branca / contraste deslocada
+  if (borderColor) {
+    ctx.fillStyle = borderColor;
+    ctx.beginPath();
+    ctx.moveTo(x - 10, y - 10);
+    for (let i = 0; i <= teeth; i++) {
+      const jitter = ((i * 17) % 9) - 4;
+      ctx.lineTo(x + i * step, y - 10 + jitter);
     }
-    setTimeout(() => {
-      const qs = window.location.search || "";
-      window.location.replace("./login.html" + qs);
-    }, 2000);
-  </script>
+    ctx.lineTo(x + w + 12, y + h + 10);
+    for (let i = teeth; i >= 0; i--) {
+      const jitter = ((i * 23) % 9) - 4;
+      ctx.lineTo(x + i * step, y + h + 10 + jitter);
+    }
+    ctx.closePath();
+    ctx.fill();
+  }
+
+  // Corpo principal rasgado
+  ctx.fillStyle = fillColor;
+  ctx.shadowColor = 'rgba(0,0,0,0.65)';
+  ctx.shadowBlur = 18;
+  ctx.shadowOffsetY = 8;
+  ctx.beginPath();
+  ctx.moveTo(x, y);
+  for (let i = 0; i <= teeth; i++) {
+    const jitter = ((i * 13) % 8) - 4;
+    ctx.lineTo(x + i * step, y + jitter);
+  }
+  ctx.lineTo(x + w + 6, y + h / 2);
+  ctx.lineTo(x + w, y + h);
+  for (let i = teeth; i >= 0; i--) {
+    const jitter = ((i * 19) % 8) - 4;
+    ctx.lineTo(x + i * step, y + h + jitter);
+  }
+  ctx.lineTo(x - 6, y + h / 2);
+  ctx.closePath();
+  ctx.fill();
+  ctx.restore();
+}
+
+// Desenho da Barrinha Social (Estilo @JulioGameplay do print)
+function drawSocialBar() {
+  if (!document.getElementById('socialEnabled').checked) return;
+  const platform = document.getElementById('socialPlatform').value;
+  const handle = document.getElementById('socialHandle').value || '@SeuCanal';
+  const style = document.getElementById('socialBarStyle').value;
+  const baseColor = document.getElementById('socialBarColor').value;
+  const yPct = parseFloat(document.getElementById('socialY').value) / 100;
+  const y = canvas.height * yPct;
+  const barH = 88;
+
+  ctx.save();
+  if (style === 'metallic-red' || style === 'metallic-yellow') {
+    const c1 = style === 'metallic-yellow' ? '#FFE600' : baseColor;
+    const c2 = style === 'metallic-yellow' ? '#8A5A00' : '#2B0000';
+    const grad = ctx.createLinearGradient(0, y - barH/2, 0, y + barH/2);
+    grad.addColorStop(0, c1);
+    grad.addColorStop(0.5, c2);
+    grad.addColorStop(1, c1);
+    ctx.fillStyle = grad;
+    ctx.fillRect(0, y - barH/2, canvas.width, barH);
+
+    // Linhas metálicas diagonais nas pontas
+    ctx.strokeStyle = 'rgba(255,255,255,0.45)';
+    ctx.lineWidth = 4;
+    ctx.beginPath();
+    ctx.moveTo(0, y - barH/2 + 3); ctx.lineTo(canvas.width, y - barH/2 + 3);
+    ctx.moveTo(0, y + barH/2 - 3); ctx.lineTo(canvas.width, y + barH/2 - 3);
+    ctx.moveTo(90, y - barH/2); ctx.lineTo(40, y + barH/2);
+    ctx.moveTo(canvas.width - 90, y - barH/2); ctx.lineTo(canvas.width - 40, y + barH/2);
+    ctx.stroke();
+  } else if (style === 'dark-neon') {
+    ctx.fillStyle = 'rgba(8, 12, 10, 0.92)';
+    ctx.fillRect(0, y - barH/2, canvas.width, barH);
+    ctx.strokeStyle = baseColor;
+    ctx.lineWidth = 4;
+    ctx.strokeRect(0, y - barH/2, canvas.width, barH);
+  } else {
+    ctx.fillStyle = baseColor;
+    ctx.beginPath();
+    ctx.roundRect(180, y - barH/2, canvas.width - 360, barH, 44);
+    ctx.fill();
+  }
+
+  // Medir texto + ícone para centralizar
+  ctx.font = "italic 900 50px 'Montserrat', sans-serif";
+  const textW = ctx.measureText(handle).width;
+  const iconW = 74;
+  const gap = 18;
+  const totalW = iconW + gap + textW;
+  const startX = (canvas.width - totalW) / 2;
+
+  // Ícone da plataforma
+  const ix = startX;
+  const iy = y - 26;
+  ctx.save();
+  if (platform === 'youtube') {
+    ctx.fillStyle = '#FF0000';
+    ctx.beginPath();
+    ctx.roundRect(ix, iy, 74, 52, 14);
+    ctx.fill();
+    ctx.fillStyle = '#FFFFFF';
+    ctx.beginPath();
+    ctx.moveTo(ix + 30, iy + 14);
+    ctx.lineTo(ix + 30, iy + 38);
+    ctx.lineTo(ix + 51, iy + 26);
+    ctx.closePath();
+    ctx.fill();
+  } else if (platform === 'instagram') {
+    const ig = ctx.createLinearGradient(ix, iy+52, ix+74, iy);
+    ig.addColorStop(0, '#F58529'); ig.addColorStop(0.5, '#DD2A7B'); ig.addColorStop(1, '#8134AF');
+    ctx.fillStyle = ig;
+    ctx.beginPath(); ctx.roundRect(ix, iy, 64, 54, 15); ctx.fill();
+    ctx.strokeStyle = '#FFF'; ctx.lineWidth = 4;
+    ctx.strokeRect(ix+14, iy+10, 36, 34);
+  } else if (platform === 'kick') {
+    ctx.fillStyle = '#53FC18';
+    ctx.beginPath(); ctx.roundRect(ix, iy, 64, 54, 12); ctx.fill();
+    ctx.fillStyle = '#000'; ctx.font = "900 36px 'Anton'";
+    ctx.fillText('K', ix + 21, iy + 41);
+  } else if (platform === 'twitch') {
+    ctx.fillStyle = '#9146FF';
+    ctx.beginPath(); ctx.roundRect(ix, iy, 64, 54, 12); ctx.fill();
+    ctx.fillStyle = '#FFF'; ctx.font = "900 32px 'Anton'";
+    ctx.fillText('TW', ix + 13, iy + 39);
+  } else if (platform === 'kwai') {
+    ctx.fillStyle = '#FF6600';
+    ctx.beginPath(); ctx.roundRect(ix, iy, 64, 54, 12); ctx.fill();
+    ctx.fillStyle = '#FFF'; ctx.font = "900 32px 'Anton'";
+    ctx.fillText('KW', ix + 11, iy + 39);
+  } else {
+    ctx.fillStyle = '#111';
+    ctx.beginPath(); ctx.roundRect(ix, iy, 64, 54, 12); ctx.fill();
+    ctx.fillStyle = '#00F2EA'; ctx.font = "900 32px 'Anton'";
+    ctx.fillText('TK', ix + 15, iy + 39);
+  }
+  ctx.restore();
+
+  // Texto @Handle
+  ctx.fillStyle = '#FFFFFF';
+  ctx.shadowColor = 'rgba(0,0,0,0.85)';
+  ctx.shadowBlur = 8;
+  ctx.shadowOffsetX = 3;
+  ctx.shadowOffsetY = 3;
+  ctx.textBaseline = 'middle';
+  ctx.fillText(handle, startX + iconW + gap, y + 3);
+  ctx.restore();
+}
+
+// Desenho do Gancho / Título Visual (Estilo "OLHA OS GRÁFICOS DESSE JOGO MOBILE BRASILEIRO")
+function drawHookBanner() {
+  if (!document.getElementById('hookEnabled').checked) return;
+  const line1 = document.getElementById('hookLine1').value;
+  const line2 = document.getElementById('hookLine2').value;
+  const style = document.getElementById('hookStyle').value;
+  const customBg = document.getElementById('hookBgColor').value;
+  const c1 = document.getElementById('hookColor1').value;
+  const c2 = document.getElementById('hookColor2').value;
+  const yPct = parseFloat(document.getElementById('hookY').value) / 100;
+  const centerY = canvas.height * yPct;
+
+  const boxW = 940;
+  const boxH = line2.trim() ? 185 : 110;
+  const boxX = (canvas.width - boxW) / 2;
+  const boxY = centerY - boxH / 2;
+
+  ctx.save();
+  if (style.startsWith('ripped')) {
+    const bg = style === 'ripped-yellow' ? '#FFE600' : style === 'ripped-black' ? '#0D0D0D' : customBg;
+    const border = style === 'ripped-yellow' ? '#000000' : '#FFFFFF';
+    drawRippedBanner(boxX, boxY, boxW, boxH, bg, border);
+  } else if (style === 'notebook') {
+    drawRippedBanner(boxX, boxY, boxW, boxH, '#F8FAFC', '#CBD5E1');
+    ctx.strokeStyle = '#93C5FD';
+    ctx.lineWidth = 2;
+    for (let ly = boxY + 25; ly < boxY + boxH - 10; ly += 24) {
+      ctx.beginPath(); ctx.moveTo(boxX + 15, ly); ctx.lineTo(boxX + boxW - 15, ly); ctx.stroke();
+    }
+  } else {
+    ctx.fillStyle = style === 'box-yellow' ? '#FFE600' : customBg;
+    ctx.beginPath();
+    ctx.roundRect(boxX, boxY, boxW, boxH, 16);
+    ctx.fill();
+  }
+
+  ctx.textAlign = 'center';
+  ctx.textBaseline = 'middle';
+  ctx.font = "italic 900 54px 'Anton', sans-serif";
+  ctx.lineWidth = 8;
+  ctx.strokeStyle = '#000000';
+
+  if (line2.trim()) {
+    ctx.strokeText(line1, canvas.width / 2, centerY - 38);
+    ctx.fillStyle = c1;
+    ctx.fillText(line1, canvas.width / 2, centerY - 38);
+
+    ctx.strokeText(line2, canvas.width / 2, centerY + 38);
+    ctx.fillStyle = c2;
+    ctx.fillText(line2, canvas.width / 2, centerY + 38);
+  } else {
+    ctx.strokeText(line1, canvas.width / 2, centerY);
+    ctx.fillStyle = c1;
+    ctx.fillText(line1, canvas.width / 2, centerY);
+  }
+  ctx.restore();
+}
+
+// Desenho da Legenda Dinâmica (Estilo "PEDI DEMISSÃO DO EMPREGO...")
+function drawCaptions() {
+  const raw = document.getElementById('captionText').value.trim();
+  if (!raw) return;
+  const font = document.getElementById('captionFont').value;
+  const size = parseInt(document.getElementById('captionSize').value, 10);
+  const yPct = parseFloat(document.getElementById('captionY').value) / 100;
+  const highlights = document.getElementById('highlightWords').value
+    .split(',').map(w => w.trim().toUpperCase()).filter(Boolean);
+
+  ctx.save();
+  ctx.font = `900 ${size}px ${font}`;
+  ctx.textBaseline = 'middle';
+
+  const words = raw.split(/\s+/);
+  const lines = [];
+  let currentLine = [];
+  const maxWidth = 920;
+
+  words.forEach(word => {
+    const test = [...currentLine, word].join(' ');
+    if (ctx.measureText(test).width > maxWidth && currentLine.length > 0) {
+      lines.push(currentLine);
+      currentLine = [word];
+    } else {
+      currentLine.push(word);
+    }
+  });
+  if (currentLine.length) lines.push(currentLine);
+
+  const lineHeight = size * 1.32;
+  const startY = canvas.height * yPct - ((lines.length - 1) * lineHeight) / 2;
+
+  lines.forEach((lineWords, lIdx) => {
+    const ly = startY + lIdx * lineHeight;
+    const fullLine = lineWords.join(' ');
+    const lineW = ctx.measureText(fullLine).width;
+    const padX = 28;
+    const padY = 14;
+
+    // Fundo da linha (Box sólida ou Rasgado estilo print GTA 6)
+    if (activePreset.mode === 'box' || activePreset.mode === 'ripped') {
+      const bx = (canvas.width - lineW) / 2 - padX;
+      const by = ly - size / 2 - padY;
+      const bw = lineW + padX * 2;
+      const bh = size + padY * 2;
+
+      if (activePreset.mode === 'ripped') {
+        drawRippedBanner(bx, by, bw, bh, colors.capBg, '#FFFFFF');
+      } else {
+        ctx.fillStyle = colors.capBg;
+        ctx.beginPath();
+        ctx.roundRect(bx, by, bw, bh, 14);
+        ctx.fill();
+      }
+    }
+
+    // Renderizar palavra por palavra para permitir destaque de cor
+    let cursorX = (canvas.width - lineW) / 2;
+    lineWords.forEach((w, wIdx) => {
+      const clean = w.replace(/[.,!?]/g, '').toUpperCase();
+      const isHighlight = highlights.includes(clean);
+      const fill = isHighlight ? colors.capHighlight : colors.capText;
+
+      ctx.save();
+      if (activePreset.glow && activePreset.glow !== 'transparent') {
+        ctx.shadowColor = activePreset.glow;
+        ctx.shadowBlur = 22;
+      }
+      ctx.lineWidth = Math.max(6, size * 0.14);
+      ctx.strokeStyle = colors.capStroke;
+      ctx.lineJoin = 'round';
+      ctx.strokeText(w, cursorX, ly);
+
+      ctx.fillStyle = fill;
+      ctx.fillText(w, cursorX, ly);
+      ctx.restore();
+
+      cursorX += ctx.measureText(w + ' ').width;
+    });
+  });
+  ctx.restore();
+}
+
+function renderFrame() {
+  ctx.fillStyle = '#070b09';
+  ctx.fillRect(0, 0, canvas.width, canvas.height);
+
+  const layout = document.getElementById('layoutMode').value;
+  const splitH = canvas.height * (parseFloat(document.getElementById('splitRatio').value) / 100);
+
+  if (layout === 'split') {
+    // Topo: Câmera / Reação
+    if (camVideo.readyState >= 2) {
+      drawCover(camVideo, 0, 0, canvas.width, splitH);
+    } else {
+      ctx.fillStyle = '#111b16';
+      ctx.fillRect(0, 0, canvas.width, splitH);
+      ctx.fillStyle = '#4f7562';
+      ctx.font = '700 28px Montserrat';
+      ctx.textAlign = 'center';
+      ctx.fillText('ÁREA CÂMERA / REAÇÃO (TOPO)', canvas.width / 2, splitH / 2);
+    }
+    // Base: Gameplay
+    if (mainVideo.readyState >= 2) {
+      drawCover(mainVideo, 0, splitH, canvas.width, canvas.height - splitH);
+    } else {
+      ctx.fillStyle = '#0a120e';
+      ctx.fillRect(0, splitH, canvas.width, canvas.height - splitH);
+      ctx.fillStyle = '#4f7562';
+      ctx.font = '700 28px Montserrat';
+      ctx.textAlign = 'center';
+      ctx.fillText('ÁREA GAMEPLAY / CORTE (BASE)', canvas.width / 2, splitH + (canvas.height - splitH) / 2);
+    }
+  } else {
+    if (mainVideo.readyState >= 2) {
+      drawCover(mainVideo, 0, 0, canvas.width, canvas.height);
+    } else {
+      // Fundo demonstrativo
+      const grad = ctx.createLinearGradient(0, 0, 0, canvas.height);
+      grad.addColorStop(0, '#10241a');
+      grad.addColorStop(1, '#050907');
+      ctx.fillStyle = grad;
+      ctx.fillRect(0, 0, canvas.width, canvas.height);
+    }
+  }
+
+  drawHookBanner();
+  drawSocialBar();
+  drawCaptions();
+}
+
+function drawCover(video, x, y, w, h) {
+  const vw = video.videoWidth || 1080;
+  const vh = video.videoHeight || 1920;
+  const scale = Math.max(w / vw, h / vh);
+  const nw = vw * scale;
+  const nh = vh * scale;
+  ctx.save();
+  ctx.beginPath();
+  ctx.rect(x, y, w, h);
+  ctx.clip();
+  ctx.drawImage(video, x + (w - nw) / 2, y + (h - nh) / 2, nw, nh);
+  ctx.restore();
+}
+
+// Arrastar elementos no Canvas
+let dragTarget = null;
+canvas.addEventListener('mousedown', e => {
+  const rect = canvas.getBoundingClientRect();
+  const yPct = ((e.clientY - rect.top) / rect.height) * 100;
+  const capY = parseFloat(document.getElementById('captionY').value);
+  const hookY = parseFloat(document.getElementById('hookY').value);
+  const socY = parseFloat(document.getElementById('socialY').value);
+
+  const dists = [
+    { id: 'captionY', d: Math.abs(yPct - capY) },
+    { id: 'hookY', d: Math.abs(yPct - hookY) },
+    { id: 'socialY', d: Math.abs(yPct - socY) }
+  ].sort((a, b) => a.d - b.d);
+
+  if (dists[0].d < 12) dragTarget = dists[0].id;
+});
+window.addEventListener('mousemove', e => {
+  if (!dragTarget) return;
+  const rect = canvas.getBoundingClientRect();
+  const yPct = Math.max(5, Math.min(95, ((e.clientY - rect.top) / rect.height) * 100));
+  document.getElementById(dragTarget).value = Math.round(yPct);
+  renderFrame();
+});
+window.addEventListener('mouseup', () => { dragTarget = null; });
+
+function exportFramePNG() {
+  renderFrame();
+  const a = document.createElement('a');
+  a.download = 'clipforge-frame.png';
+  a.href = canvas.toDataURL('image/png');
+  a.click();
+}
+
+function exportVideo() {
+  const status = document.getElementById('exportStatus');
+  if (!mainVideo.src) {
+    status.textContent = 'Carregue um vídeo primeiro para exportar.';
+    return;
+  }
+  status.textContent = 'Gravando clipe em tempo real...';
+  const stream = canvas.captureStream(30);
+  const recorder = new MediaRecorder(stream, { mimeType: 'video/webm' });
+  const chunks = [];
+  recorder.ondataavailable = e => { if (e.data.size > 0) chunks.push(e.data); };
+  recorder.onstop = () => {
+    const blob = new Blob(chunks, { type: 'video/webm' });
+    const a = document.createElement('a');
+    a.href = URL.createObjectURL(blob);
+    a.download = 'clipforge-export.webm';
+    a.click();
+    status.textContent = 'Exportação concluída!';
+  };
+  mainVideo.currentTime = 0;
+  mainVideo.play();
+  recorder.start();
+  const dur = Math.min((mainVideo.duration || 5) * 1000, 15000);
+  setTimeout(() => recorder.stop(), dur);
+}
+
+function loop() {
+  renderFrame();
+  requestAnimationFrame(loop);
+}
+loop();
+</script>
 </body>
 </html>

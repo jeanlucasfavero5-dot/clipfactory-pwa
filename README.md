@@ -1,6 +1,19 @@
-# ClipFactory PWA × Hub WaveCombat (v0.019)
+# ClipForge Studio v2.0
 
-## Correções desta versão (v0.019)
-- **Gancho / Título Visual 100% opcional:** Quando o gancho está desativado (`Gancho desativado (ativar)`) ou com o campo de texto vazio, nenhum título é desenhado por cima do vídeo (nem na prévia nem na exportação).
-- **Sem repopulação automática ao trocar de clipe:** Limpar o campo *"Texto do gancho / título"* ou desativar o gancho mantém sua escolha intacta ao clicar em outros cortes sugeridos.
-- **Título automático mantido no nome do arquivo:** No download do vídeo, o arquivo continua sendo nomeado automaticamente com o título viral sugerido do corte (ou com o texto do gancho caso você digite um personalizado).
+Editor web completo para criação de clipes verticais (9:16), Shorts, Reels e TikToks no estilo viral de clipadas gamers e entretenimento.
+
+## Novidades da Versão 2.0
+- **Identidade 100% Original**: Removidas todas as referências de marcas e nomes de terceiros para evitar problemas de direitos autorais.
+- **56+ Presets de Legendas Virais**: Inclui estilos com caixas sólidas vermelhas/amarelas, neon duplo, aura carmim, folha de caderno, papel rasgado, adesivo e cromado.
+- **Painel de Cores Personalizável (Color Studio)**: Seletor completo (Saturação/Brilho + Matiz + Paleta Rápida) independente para:
+  - Cor da letra principal
+  - Cor das palavras de destaque (ex.: amarelo ou vermelho)
+  - Cor do fundo / faixa da legenda
+  - Cor da borda / brilho
+- **Faixas de Gancho Estilo Clipada**: Banners com efeito de papel rasgado (vermelho, amarelo, preto grunge ou folha de caderno) com duas linhas de texto contrastantes.
+- **Barrinha Social com `@` Personalizável**: Faixa metálica 3D ou neon com ícones para YouTube, Instagram, TikTok, Kwai, Twitch e Kick + campo livre para seu `@`.
+
+## Como publicar no GitHub Pages
+1. Extraia o conteúdo deste ZIP.
+2. Envie o arquivo `index.html` (e `README.md`) para a raiz do seu repositório no GitHub.
+3. Acesse **Settings > Pages**, selecione a branch `main` e clique em **Save**.

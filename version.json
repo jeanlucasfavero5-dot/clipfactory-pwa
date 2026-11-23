@@ -1,5 +1,5 @@
 {
-  "version": "0.009",
+  "version": "0.010",
   "url": "./index.html",
-  "notes": "Opaque dark icon background with large CLIP + play badge above and FACTORY below."
+  "notes": "Pasta completa atualizada com correcoes de minutagem, desconto de creditos e botao PWA."
 }

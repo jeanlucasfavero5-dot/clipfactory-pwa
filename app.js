@@ -70,9 +70,7 @@ function setExportLog(msg, pct = null) {
 /* ============================================================
    Patch EBML / WebM Duration so players display exact length instead of 0:00
    ============================================================ */
-function findFloat64Offset(bytes, targetMs) {
-  const view = new DataView(bytes.buffer, bytes.byteOffset, bytes.byteLength);
-  // Look for WebM Duration element ID 0x44 0x89 followed by 0x88 (8-byte float)
+function findFloat64Offset(bytes) {
   for (let i = 0; i < bytes.length - 11; i++) {
     if (bytes[i] === 0x44 && bytes[i + 1] === 0x89 && bytes[i + 2] === 0x88) {
       return i + 3;

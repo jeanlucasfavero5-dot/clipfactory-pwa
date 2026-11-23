@@ -341,7 +341,7 @@ input:focus{
 <script>
 "use strict";
 
-const APP_VERSION = "0.009";
+const APP_VERSION = "0.010";
 const VERSION_CHECK_URL = "./version.json";
 const SUPABASE_URL = "https://ipqjeacdfiomcxfuixdj.supabase.co";
 const SUPABASE_KEY = "sb_publishable_EWW84q_43YbOvMwB_Rua-A_X465PbLP";
@@ -436,7 +436,7 @@ $("updateBtn").addEventListener("click", async () => {
     }
   } catch (e) {}
 
-  window.location.href = latestUpdateUrl || "./login.html";
+  const baseUrl = latestUpdateUrl || "./login.html"; const sep = baseUrl.includes("?") ? "&" : "?"; window.location.replace(baseUrl + sep + "v=" + Date.now());
 });
 
 window.addEventListener("beforeinstallprompt", e => {

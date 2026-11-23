@@ -466,7 +466,7 @@ a.dl{display:inline-block;margin-top:10px;background:linear-gradient(135deg,var(
 <script src="./wallet.js"></script>
 <script>
 "use strict";
-const EDITOR_VERSION = "0.009";
+const EDITOR_VERSION = "0.010";
 document.getElementById("appVersion").textContent = "v" + EDITOR_VERSION;
 
 if ("serviceWorker" in navigator) {
@@ -511,7 +511,7 @@ document.getElementById("updateBtn").addEventListener("click", async () => {
       await Promise.all(keys.map(k => caches.delete(k)));
     }
   } catch (e) {}
-  window.location.href = "./login.html";
+  window.location.replace("./login.html?v=" + Date.now());
 });
 </script>
 </body>

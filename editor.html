@@ -1,0 +1,479 @@
+<!DOCTYPE html>
+<html lang="pt-BR">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
+<title>ClipFactory — Editor & Cortes 9:16</title>
+<link rel="manifest" href="./manifest.json">
+<link rel="icon" type="image/png" sizes="192x192" href="./icon-192.png">
+<link rel="apple-touch-icon" href="./icon-192.png">
+<meta name="theme-color" content="#07140e">
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Anton&family=Bebas+Neue&family=Bangers&family=Luckiest+Guy&family=Archivo+Black&family=Permanent+Marker&family=Righteous&family=Oswald:wght@600&family=Montserrat:wght@700;900&family=Poppins:wght@700&display=swap" rel="stylesheet">
+<style>
+:root{
+  --bg:#030705;
+  --bg2:#07140e;
+  --panel:rgba(8,22,15,.94);
+  --panel2:rgba(12,34,23,.82);
+  --border:rgba(34,197,94,.24);
+  --border2:rgba(74,222,128,.58);
+  --txt:#e9fff2;
+  --muted:#84a893;
+  --accent:#22c55e;
+  --acc2:#4ade80;
+  --btn-g1:#0f5132;
+  --btn-g2:#146c43;
+  --btn-g-hover:#198754;
+  --glow:rgba(34,197,94,.28);
+  --good:#22c55e;
+  --warn:#f5c518;
+  --bad:#ef4444;
+  --upd-bg:#1a0608;
+  --upd-btn:#991b1b;
+  --upd-btn-hover:#dc2626;
+  --upd-border:rgba(248,113,113,.45);
+  --upd-txt:#fecaca;
+}
+*{box-sizing:border-box;margin:0;padding:0}
+body{
+  min-height:100vh;
+  background:
+    radial-gradient(860px 460px at 82% -10%, rgba(20,108,67,.28), transparent 60%),
+    radial-gradient(660px 420px at -10% 85%, rgba(15,81,50,.24), transparent 60%),
+    linear-gradient(180deg, var(--bg2), var(--bg));
+  color:var(--txt);
+  font-family:system-ui,-apple-system,"Segoe UI",Roboto,sans-serif;
+  padding-bottom:44px;
+}
+header{
+  display:flex;align-items:center;gap:10px;padding:12px 18px;flex-wrap:wrap;
+  border-bottom:1px solid var(--border);
+  background:linear-gradient(180deg,rgba(8,22,15,.96),rgba(5,14,10,.88));
+  backdrop-filter:blur(12px);
+  position:sticky;top:0;z-index:20;
+}
+header .logo{font-weight:900;font-size:20px;letter-spacing:.4px}
+header .logo span{color:var(--accent)}
+header .tag{font-size:12px;color:var(--muted)}
+.follow-btn{
+  display:inline-flex;align-items:center;gap:6px;
+  background:linear-gradient(135deg,var(--btn-g2),var(--btn-g1));color:#fff;
+  border:1px solid var(--border2);border-radius:99px;padding:7px 15px;font-size:12px;font-weight:800;
+  text-decoration:none;box-shadow:0 0 14px var(--glow);white-space:nowrap;
+}
+.follow-btn:hover{background:linear-gradient(135deg,var(--btn-g-hover),var(--btn-g2))}
+main{max-width:1760px;margin:0 auto;padding:16px}
+.card{
+  background:var(--panel);border:1px solid var(--border);border-radius:16px;
+  padding:0;backdrop-filter:blur(10px);
+  box-shadow:0 10px 32px rgba(0,0,0,.48);
+  overflow:hidden;
+}
+.card-h{
+  display:flex;align-items:center;gap:10px;padding:12px 16px;
+  cursor:pointer;user-select:none;
+}
+.card-h:hover{background:rgba(34,197,94,.07)}
+.card-h h2{margin:0;flex:1}
+.card-body{padding:4px 16px 16px}
+.card.collapsed .card-body{display:none}
+.collapse-btn{
+  background:var(--panel2);border:1px solid var(--border);border-radius:8px;
+  width:28px;height:28px;font-size:13px;padding:0;flex:none;
+  display:inline-flex;align-items:center;justify-content:center;
+}
+h2{font-size:13px;color:var(--acc2);text-transform:uppercase;letter-spacing:1.3px}
+button{
+  background:linear-gradient(135deg,var(--btn-g2),var(--btn-g1));color:#fff;border:1px solid var(--border2);
+  border-radius:10px;padding:9px 14px;font-size:13px;font-weight:800;cursor:pointer;
+  transition:.15s;
+}
+button:hover:not(:disabled){background:linear-gradient(135deg,var(--btn-g-hover),var(--btn-g2));box-shadow:0 0 14px var(--glow)}
+button:disabled{background:#0b1912;border-color:rgba(34,197,94,.12);cursor:not-allowed;color:#577564;box-shadow:none}
+button.ghost{background:var(--panel2);border:1px solid var(--border);color:#bbf7d0}
+button.small{padding:6px 10px;font-size:12px}
+input,select,textarea{
+  background:rgba(3,10,7,.92);border:1px solid var(--border);color:var(--txt);
+  border-radius:10px;padding:8px 10px;font-size:13px;width:100%;
+}
+input:focus,select:focus,textarea:focus{outline:none;border-color:var(--border2);box-shadow:0 0 0 2px rgba(34,197,94,.15)}
+textarea{resize:vertical;font-family:inherit}
+label{font-size:12px;color:#b7dec7;font-weight:700;display:block;margin:8px 0 4px}
+.row{display:flex;gap:10px;flex-wrap:wrap;align-items:center}
+.row>*{flex:1;min-width:120px}
+.hidden{display:none!important}
+
+#updateBanner{
+  display:none;background:var(--upd-bg);border:1px solid var(--upd-border);
+  border-radius:14px;padding:11px 14px;margin-bottom:14px;
+}
+#updateBanner.show{display:block}
+.upd-title{font-size:12px;font-weight:800;color:var(--upd-txt);margin-bottom:7px;display:flex;justify-content:space-between}
+.btn-update{
+  width:100%;background:linear-gradient(135deg,var(--upd-btn),#7f1d1d);color:#fff;
+  border:1px solid var(--upd-border);border-radius:10px;padding:9px 12px;font-size:12px;font-weight:800;cursor:pointer;
+}
+.btn-update:hover{background:linear-gradient(135deg,var(--upd-btn-hover),var(--upd-btn))}
+
+.swatches{display:flex;gap:7px;flex-wrap:wrap;margin:6px 0 2px}
+.sw{width:26px;height:26px;border-radius:50%;border:2px solid rgba(255,255,255,.25);cursor:pointer;transition:.15s}
+.sw:hover{transform:scale(1.12)}
+.sw.sel{border-color:#fff;box-shadow:0 0 0 2px var(--acc2),0 0 10px var(--glow)}
+
+.presetGrid{display:grid;grid-template-columns:repeat(auto-fill,minmax(120px,1fr));gap:8px;margin:8px 0;max-height:220px;overflow:auto;padding:2px}
+.presetItem{
+  border:1px solid var(--border);border-radius:10px;padding:8px 6px;text-align:center;
+  cursor:pointer;background:var(--panel2);transition:.15s;overflow:hidden;
+}
+.presetItem:hover{border-color:var(--border2)}
+.presetItem.sel{border-color:var(--acc2);box-shadow:0 0 0 2px var(--acc2)}
+.presetItem .pv{font-size:15px;font-weight:800;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;display:block;margin-bottom:4px}
+.presetItem .pn{font-size:10px;color:var(--muted);white-space:nowrap;overflow:hidden;text-overflow:ellipsis;display:block}
+
+#step1{max-width:640px;margin:26px auto;text-align:center}
+#drop{border:2px dashed var(--border2);border-radius:18px;padding:42px 20px;cursor:pointer;transition:.2s;background:rgba(12,34,23,.35)}
+#drop:hover{border-color:var(--acc2);background:rgba(20,108,67,.2)}
+#drop .big{font-size:42px}
+
+#editor{display:grid;grid-template-columns:minmax(340px,1fr) 430px;gap:16px;align-items:start}
+@media(max-width:1100px){#editor{grid-template-columns:1fr}}
+#editor > div{display:flex;flex-direction:column;gap:16px;min-width:0}
+#videoWrap{position:relative;background:#000;border-radius:12px;overflow:hidden;border:1px solid var(--border)}
+#videoEl{width:100%;display:block;max-height:60vh}
+#cropOverlay{position:absolute;inset:0;touch-action:none}
+.cbox{position:absolute;border:2px solid;border-radius:6px;cursor:grab;user-select:none}
+.cbox.cam{border-color:var(--acc2);background:rgba(74,222,128,.14)}
+.cbox.game{border-color:#38bdf8;background:rgba(56,189,248,.14)}
+.cbox .lbl{position:absolute;top:-22px;left:-2px;font-size:11px;font-weight:800;padding:2px 8px;border-radius:5px;white-space:nowrap}
+.cbox.cam .lbl{background:var(--acc2);color:#031209}
+.cbox.game .lbl{background:#38bdf8;color:#031209}
+.cbox .rs{position:absolute;right:-6px;bottom:-6px;width:14px;height:14px;background:#fff;border:2px solid #0f5132;border-radius:50%;cursor:nwse-resize}
+#splitBar{position:absolute;left:0;right:0;height:14px;cursor:ns-resize;z-index:5;touch-action:none}
+#splitBar::before{content:"";position:absolute;left:0;right:0;top:5px;height:4px;background:var(--warn);border-radius:2px}
+#splitBar::after{content:"⇕";position:absolute;left:50%;top:50%;transform:translate(-50%,-55%);font-size:11px;color:#030705;background:var(--warn);border-radius:50%;width:20px;height:20px;line-height:20px;text-align:center;font-weight:900}
+
+#tl{position:relative;height:42px;background:rgba(3,10,7,.92);border:1px solid var(--border);border-radius:10px;margin-top:10px;touch-action:none;cursor:pointer;overflow:hidden}
+#tlFill{position:absolute;top:0;bottom:0;background:rgba(74,222,128,.25);border-left:2px solid var(--acc2);border-right:2px solid var(--acc2)}
+#tlSeg{position:absolute;top:0;bottom:0;background:rgba(34,197,94,.14);border-left:2px dashed var(--accent);border-right:2px dashed var(--accent);pointer-events:none}
+#tlHead{position:absolute;top:0;bottom:0;width:2px;background:var(--warn)}
+#tlTime{position:absolute;right:8px;top:50%;transform:translateY(-50%);font-size:11px;color:var(--muted);pointer-events:none}
+#tlHeat{position:absolute;inset:0;pointer-events:none;display:flex}
+#tlHeat div{flex:1}
+.ctlrow{display:flex;gap:8px;margin-top:10px;flex-wrap:wrap}
+
+#clipList,#hubClips{display:flex;flex-direction:column;gap:8px;margin-top:10px}
+.clipItem{display:flex;align-items:center;gap:10px;background:var(--panel2);border:1px solid var(--border);border-radius:12px;padding:10px}
+.clipItem .score{min-width:50px;height:50px;border-radius:50%;display:flex;flex-direction:column;align-items:center;justify-content:center;font-weight:800;font-size:15px;border:3px solid var(--good)}
+.clipItem .score small{font-size:8px;font-weight:600;color:var(--muted)}
+.clipItem .info{flex:1;font-size:12px;line-height:1.4;min-width:0}
+.clipItem .viral{font-size:11px;color:var(--warn);margin-top:2px}
+.clipItem .tags{font-size:10px;color:var(--acc2);word-break:break-all}
+.signal{font-size:11px;color:var(--muted)}
+.formula{font-size:11px;color:var(--muted);background:rgba(3,10,7,.78);border:1px solid var(--border);border-radius:10px;padding:8px 10px;margin-top:10px;line-height:1.55}
+.formula b{color:var(--warn)}
+
+#previewWrap{display:flex;flex-direction:column;align-items:center;gap:10px}
+#previewCanvas{width:100%;max-width:320px;aspect-ratio:9/16;background:#000;border:1px solid var(--border2);border-radius:14px;cursor:grab;touch-action:none}
+
+#capList{max-height:180px;overflow:auto;display:flex;flex-direction:column;gap:6px;margin-top:8px}
+.cueRow{display:flex;gap:6px;align-items:center}
+.cueRow input[type=text]{flex:1}
+.cueRow input[type=number]{width:66px;flex:none}
+.cueRow button{flex:none;padding:5px 8px;background:#7f1d1d;border-color:rgba(248,113,113,.45)}
+.pill{font-size:11px;padding:4px 10px;border-radius:99px;border:1px solid var(--border);background:var(--panel2);color:var(--muted)}
+
+#expProg{height:8px;background:rgba(3,10,7,.9);border-radius:99px;overflow:hidden;margin-top:10px}
+#expProgIn{height:100%;width:0%;background:linear-gradient(90deg,var(--btn-g2),var(--acc2));transition:width .2s}
+#expLog{font-size:11px;color:var(--muted);margin-top:6px;max-height:80px;overflow:auto;font-family:monospace}
+a.dl{display:inline-block;margin-top:10px;background:linear-gradient(135deg,var(--btn-g2),var(--accent));color:#fff;padding:10px 18px;border-radius:10px;text-decoration:none;font-weight:800}
+.footer{max-width:1760px;margin:14px auto 24px;font-size:12px;color:var(--muted);text-align:center;padding:0 16px}
+
+#walletBar{
+  display:flex;align-items:center;gap:10px;padding:8px 18px;font-size:12px;flex-wrap:wrap;
+  background:rgba(8,22,15,.88);border-bottom:1px solid var(--border);
+}
+#premiumPanel .stat{display:flex;gap:10px;flex-wrap:wrap;margin:8px 0}
+#premiumPanel .stat>div{flex:1;min-width:100px;background:var(--panel2);border:1px solid var(--border);border-radius:10px;padding:8px;text-align:center}
+#premiumPanel .stat b{font-size:17px;display:block;color:#ffd166}
+.badgePremium{background:linear-gradient(135deg,#f5c518,#f97316);color:#1a1200;border-radius:99px;padding:2px 10px;font-size:10px;font-weight:900}
+
+#appVersion{
+  position:fixed;right:14px;bottom:10px;font-size:11px;font-weight:800;letter-spacing:.6px;
+  color:#86efac;background:rgba(5,16,10,.9);border:1px solid var(--border);padding:4px 10px;border-radius:99px;z-index:30;
+}
+</style>
+</head>
+<body>
+<header>
+  <div class="logo">Clip<span>Factory</span></div>
+  <div class="tag">cortes verticais • câmera + jogo</div>
+  <div style="flex:1"></div>
+  <button class="ghost small hidden" id="installPwaBtn" title="Instalar aplicativo">📲 Instalar app</button>
+  <a class="follow-btn" href="https://youtube.com/@capudooficial7?si=awSkNhuT4YY177Yp" target="_blank" rel="noopener">▶ SIGA O CRIADOR</a>
+  <button class="ghost small" id="newVidBtn">↺ Novo vídeo</button>
+  <a href="./login.html" class="ghost small" style="text-decoration:none;display:inline-flex;align-items:center">Sair</a>
+</header>
+
+<main>
+  <section id="updateBanner" aria-live="polite">
+    <div class="upd-title">
+      <span>Atualização disponível</span>
+      <span id="remoteVerLabel"></span>
+    </div>
+    <button type="button" class="btn-update" id="updateBtn">Atualizar para nova versão agora</button>
+  </section>
+
+  <section id="step1" class="card">
+    <div class="card-h"><h2>1. Envie seu vídeo</h2></div>
+    <div class="card-body">
+      <div id="drop">
+        <div class="big">📤</div>
+        <p><b>Clique para escolher</b> ou arraste um arquivo de vídeo aqui</p>
+        <p class="pill" style="display:inline-block;margin-top:8px">MP4 · MOV · WEBM · MKV — processado no seu dispositivo</p>
+      </div>
+      <input type="file" id="fileInput" accept="video/*" class="hidden">
+    </div>
+  </section>
+
+  <section id="editor" class="hidden">
+    <div>
+      <div class="card" id="cardFrame">
+        <div class="card-h"><h2>2. Enquadramento — arraste as duas áreas</h2><button class="collapse-btn" title="expandir/recolher">▾</button></div>
+        <div class="card-body">
+          <div id="videoWrap">
+            <video id="videoEl" playsinline></video>
+            <div id="cropOverlay">
+              <div class="cbox cam" id="boxCam"><span class="lbl">📷 CÂMERA</span><div class="rs"></div></div>
+              <div class="cbox game" id="boxGame"><span class="lbl">🎮 JOGO</span><div class="rs"></div></div>
+              <div id="splitBar" title="Arraste para mudar a divisão câmera/jogo"></div>
+            </div>
+          </div>
+          <div id="tl">
+            <div id="tlHeat"></div>
+            <div id="tlSeg"></div>
+            <div id="tlFill"></div>
+            <div id="tlHead"></div>
+            <span id="tlTime">0:00 / 0:00</span>
+          </div>
+          <p class="signal" style="margin-top:6px">Clique na barra para navegar. Arraste as caixas de câmera e jogo e a barra divisória.</p>
+
+          <label>Modo de tela</label>
+          <div class="row" style="gap:8px">
+            <button class="ghost small layoutBtn" data-layout="split" style="flex:1">🎥 + 🎮 Dividido</button>
+            <button class="ghost small layoutBtn" data-layout="cam_only" style="flex:1">📷 Só câmera</button>
+            <button class="ghost small layoutBtn" data-layout="game_only" style="flex:1">🎮 Só jogo</button>
+          </div>
+
+          <label>Janela de análise — escolha até <b id="segMaxLbl">30</b> minutos do vídeo para gerar os cortes</label>
+          <div class="row" style="gap:8px">
+            <div><label style="margin:0">Início (min)</label><input type="number" id="segStart" min="0" step="1" value="0"></div>
+            <div><label style="margin:0">Fim (min)</label><input type="number" id="segEnd" min="0" step="1" value="30"></div>
+            <button class="ghost small" id="segHereBtn" style="flex:0 0 auto">⏱ 30 min a partir do playhead</button>
+          </div>
+          <p class="signal" id="segInfo" style="margin-top:4px"></p>
+
+          <div class="ctlrow">
+            <button class="ghost" id="swapBtn">⇅ Trocar cima/baixo</button>
+            <button class="ghost" id="playBtn">▶ Prévia</button>
+            <button id="analyzeBtn">🧠 Analisar melhores momentos</button>
+          </div>
+        </div>
+      </div>
+
+      <div class="card" id="cardMoments">
+        <div class="card-h"><h2>3. Melhores momentos (heurístico)</h2><button class="collapse-btn">▾</button></div>
+        <div class="card-body">
+          <div id="clipList"><p class="signal">Clique em <b>Analisar melhores momentos</b> para gerar sugestões de corte com nota.</p></div>
+          <div class="row" style="margin-top:8px"><button class="ghost small" id="downloadAllLocalBtn" style="display:none">⬇ Baixar todos (cobra o plano escolhido 1×)</button></div>
+          <div class="formula">
+            <b>Como a nota é calculada</b> (0–100, janela deslizante de cortes):<br>
+            <code>Nota = 50×PicoDeÁudio + 30×Movimento/CortesDeCena + 20×Intensidade</code>
+          </div>
+        </div>
+      </div>
+    </div>
+
+    <div>
+      <div class="card" id="cardPreview">
+        <div class="card-h"><h2>4. Prévia vertical 9:16 — ao vivo</h2><button class="collapse-btn">▾</button></div>
+        <div class="card-body">
+          <div id="previewWrap">
+            <canvas id="previewCanvas" width="1080" height="1920"></canvas>
+          </div>
+          <p class="signal" style="text-align:center">Arraste na prévia para mover <b style="color:var(--warn)">gancho</b> e <b style="color:var(--acc2)">legenda</b>.</p>
+          <div class="row" style="width:100%">
+            <div><label>Tamanho da LEGENDA</label><input type="range" id="fontSz" min="24" max="140" value="48"></div>
+            <div><label>Tamanho do GANCHO</label><input type="range" id="hookSz" min="28" max="200" value="64"></div>
+          </div>
+        </div>
+      </div>
+
+      <div class="card" id="cardCap">
+        <div class="card-h"><h2>5. Legenda — estilo CapCut (50+ presets)</h2><button class="collapse-btn">▾</button></div>
+        <div class="card-body">
+          <label>Presets de estilo (fonte + cor + fundo + animação)</label>
+          <div class="presetGrid" id="capPresets"></div>
+          <label>Fonte</label>
+          <select id="capFont">
+            <option value="Anton">Anton</option><option value="Bebas Neue">Bebas Neue</option>
+            <option value="Bangers">Bangers</option><option value="Luckiest Guy">Luckiest Guy</option>
+            <option value="Archivo Black">Archivo Black</option><option value="Permanent Marker">Permanent Marker</option>
+            <option value="Righteous">Righteous</option><option value="Oswald">Oswald</option>
+            <option value="Montserrat">Montserrat</option><option value="Poppins">Poppins</option>
+          </select>
+          <label>Cor</label>
+          <div class="swatches" id="capColorSwatches"></div>
+          <label>Fundo / efeito</label>
+          <select id="capBg">
+            <option value="outline">Contorno</option><option value="highlight">Destaque sólido</option>
+            <option value="bar">Barra</option><option value="box">Caixa</option>
+            <option value="glow">Brilho neon</option><option value="gradient">Gradiente/sombra dupla</option>
+            <option value="shadow">Sombra</option><option value="karaoke">Karaoke (palavra a palavra)</option>
+          </select>
+          <label>Cor do fundo / traço</label>
+          <div class="swatches" id="capBgSwatches"></div>
+          <label>Animação de entrada</label>
+          <select id="capAnim">
+            <option value="none">Nenhuma</option><option value="pop">Pop</option>
+            <option value="slideup">Subindo</option><option value="typewriter">Máquina de escrever</option>
+            <option value="pulse">Pulso</option><option value="shake">Tremor</option>
+            <option value="fade">Fade</option><option value="zoomout">Zoom out</option>
+          </select>
+          <div class="row" style="margin-top:8px">
+            <input type="password" id="whisperKey" placeholder="Chave OpenAI (opcional — legenda automática)">
+            <button class="ghost" id="whisperBtn" style="flex:0 0 auto">🪄 Transcrever</button>
+          </div>
+          <div class="row" style="margin-top:6px">
+            <button class="ghost small" id="addCapBtn">＋ Legenda no tempo atual</button>
+            <button class="ghost small" id="srtBtn">⬇ Exportar .SRT</button>
+          </div>
+          <div id="capList"></div>
+        </div>
+      </div>
+
+      <div class="card" id="cardHook">
+        <div class="card-h"><h2>6. Gancho visual — estilo CapCut (50+ presets)</h2><button class="collapse-btn">▾</button></div>
+        <div class="card-body">
+          <label>Texto do gancho (aparece no vídeo)</label>
+          <input type="text" id="hookText" placeholder="ex.: ESSA JOGADA É IRREAL! 😱">
+          <label>Presets de estilo (fonte + cor + fundo + animação)</label>
+          <div class="presetGrid" id="hookPresets"></div>
+          <label>Fonte</label>
+          <select id="hookFont">
+            <option value="Bebas Neue">Bebas Neue</option><option value="Anton">Anton</option>
+            <option value="Bangers">Bangers</option><option value="Luckiest Guy">Luckiest Guy</option>
+            <option value="Archivo Black">Archivo Black</option><option value="Permanent Marker">Permanent Marker</option>
+            <option value="Righteous">Righteous</option><option value="Oswald">Oswald</option>
+            <option value="Montserrat">Montserrat</option><option value="Poppins">Poppins</option>
+          </select>
+          <label>Cor</label>
+          <div class="swatches" id="hookColorSwatches"></div>
+          <label>Fundo / efeito</label>
+          <select id="hookBg">
+            <option value="outline">Contorno</option><option value="highlight">Destaque sólido</option>
+            <option value="bar">Barra</option><option value="box">Caixa</option>
+            <option value="glow">Brilho neon</option><option value="gradient">Gradiente/sombra dupla</option>
+            <option value="shadow">Sombra</option>
+          </select>
+          <label>Cor do fundo / traço</label>
+          <div class="swatches" id="hookBgSwatches"></div>
+          <label>Animação de entrada</label>
+          <select id="hookAnim">
+            <option value="none">Nenhuma</option><option value="pop">Pop</option>
+            <option value="slideup">Subindo</option><option value="typewriter">Máquina de escrever</option>
+            <option value="pulse">Pulso</option><option value="shake">Tremor</option>
+            <option value="fade">Fade</option><option value="zoomout">Zoom out</option>
+          </select>
+          <div class="row" style="margin-top:8px">
+            <button class="ghost small" id="hookToggle">👁 Mostrar/ocultar</button>
+          </div>
+        </div>
+      </div>
+
+      <div class="card" id="cardExport">
+        <div class="card-h"><h2>7. Exportar</h2><button class="collapse-btn">▾</button></div>
+        <div class="card-body">
+          <label>Formato</label>
+          <select id="expMode">
+            <option value="fast">WebM vertical — rápido, queima legenda + gancho (recomendado)</option>
+            <option value="mp4">MP4 vertical (H.264) via ffmpeg.wasm</option>
+          </select>
+          <label>Resolução e FPS</label>
+          <select id="expTier">
+            <option value="1080p30">1080 × 1920 · 30 fps</option>
+            <option value="1080p60">1080 × 1920 · 60 fps</option>
+            <option value="720p30">720 × 1280 · 30 fps</option>
+            <option value="720p60">720 × 1280 · 60 fps</option>
+            <option value="1440p60">⭐ 1440 × 2560 (2K vertical) · 60 fps — só Premium</option>
+          </select>
+          <button id="exportBtn" style="width:100%;margin-top:12px">⬇ Exportar corte vertical</button>
+          <div id="expProg"><div id="expProgIn"></div></div>
+          <div id="expLog"></div>
+          <div id="expResult"></div>
+        </div>
+      </div>
+    </div>
+  </section>
+</main>
+
+<div class="footer">ClipFactory × WaveCombat Hub — <a style="color:var(--acc2)" href="https://youtube.com/@capudooficial7?si=awSkNhuT4YY177Yp" target="_blank" rel="noopener">inscreva-se no canal ↗</a></div>
+<div id="appVersion">v0.002</div>
+
+<script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
+<script src="./presets.js"></script>
+<script src="./app.js"></script>
+<script src="./wallet.js"></script>
+<script>
+"use strict";
+const EDITOR_VERSION = "0.002";
+document.getElementById("appVersion").textContent = "v" + EDITOR_VERSION;
+
+if ("serviceWorker" in navigator) {
+  window.addEventListener("load", () => {
+    navigator.serviceWorker.register("./sw.js").catch(() => {});
+  });
+}
+
+function isNewerVersion(remoteVer, localVer) {
+  if (!remoteVer) return false;
+  const r = String(remoteVer).trim().split(".").map(n => parseInt(n, 10) || 0);
+  const l = String(localVer).trim().split(".").map(n => parseInt(n, 10) || 0);
+  const len = Math.max(r.length, l.length);
+  for (let i = 0; i < len; i++) {
+    if ((r[i] || 0) > (l[i] || 0)) return true;
+    if ((r[i] || 0) < (l[i] || 0)) return false;
+  }
+  return false;
+}
+
+(async function checkEditorUpdate() {
+  if (!navigator.onLine) return;
+  try {
+    const res = await fetch(`./version.json?t=${Date.now()}`, { cache: "no-store" });
+    if (!res.ok) return;
+    const data = await res.json();
+    if (data && isNewerVersion(data.version, EDITOR_VERSION)) {
+      document.getElementById("remoteVerLabel").textContent = `v${data.version}`;
+      document.getElementById("updateBanner").classList.add("show");
+    }
+  } catch (e) {}
+})();
+
+document.getElementById("updateBtn").addEventListener("click", async () => {
+  try {
+    if ("serviceWorker" in navigator) {
+      const regs = await navigator.serviceWorker.getRegistrations();
+      for (const r of regs) await r.update();
+    }
+    if ("caches" in window) {
+      const keys = await caches.keys();
+      await Promise.all(keys.map(k => caches.delete(k)));
+    }
+  } catch (e) {}
+  window.location.href = "./login.html";
+});
+</script>
+</body>
+</html>

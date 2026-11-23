@@ -1,6 +1,6 @@
 /* ============================================================
    Integração Hub WaveCombat — Supabase (assinaturas + creditos_videos + carteira_diamantes)
-   v0.011: Desconto garantido na carteira de vídeos no download + normalização de dia_uso
+   v0.012: Desconto garantido no download real + persistência robusta de créditos
    ============================================================ */
 "use strict";
 
@@ -186,6 +186,11 @@ async function loadExtraCredits() {
 
     if (error) {
       HUB.extraCredits.tableAvailable = false;
+      try {
+        const local = Number(localStorage.getItem("cf_extra_videos_restantes") || 0);
+        HUB.extraCredits.videos_restantes = Math.max(0, local);
+        renderWalletBar();
+      } catch (e) {}
       return;
     }
     HUB.extraCredits.tableAvailable = true;
@@ -252,12 +257,35 @@ async function consumeOneVideoCreditForDownload() {
   if (Number(HUB.extraCredits.videos_restantes || 0) > 0) {
     const nextRem = Math.max(0, Number(HUB.extraCredits.videos_restantes) - 1);
     HUB.extraCredits.videos_restantes = nextRem;
+
+    let persisted = false;
     if (HUB.extraCredits.tableAvailable) {
-      const sb = getSupabase();
-      await sb
-        .from("creditos_videos")
-        .update({ videos_restantes: nextRem, updated_at: new Date().toISOString() })
-        .eq("id_jogador", HUB.playerId);
+      try {
+        const sb = getSupabase();
+        // Reescreve a partir do valor atual no banco para não sobrescrever
+        // crédito comprado em outro dispositivo com valor antigo em cache.
+        const { data: fresh } = await sb
+          .from("creditos_videos")
+          .select("videos_restantes")
+          .eq("id_jogador", HUB.playerId)
+          .maybeSingle();
+        const dbRem = Number(fresh?.videos_restantes ?? HUB.extraCredits.videos_restantes);
+        const targetRem = Math.max(0, dbRem - 1);
+        const { error } = await sb
+          .from("creditos_videos")
+          .update({ videos_restantes: targetRem, updated_at: new Date().toISOString() })
+          .eq("id_jogador", HUB.playerId)
+          .gt("videos_restantes", 0);
+        persisted = !error;
+        if (persisted) HUB.extraCredits.videos_restantes = targetRem;
+        else console.warn("creditos_videos update:", error?.message);
+      } catch (e) {
+        console.warn("creditos_videos:", e);
+      }
+    }
+
+    if (!persisted) {
+      try { localStorage.setItem("cf_extra_videos_restantes", String(nextRem)); } catch (e) {}
     }
     renderWalletBar(`🎬 1 vídeo avulso descontado (${nextRem}/${Math.max(nextRem, HUB.extraCredits.videos_comprados_total)} restantes)`, "ok");
     return true;

@@ -52,6 +52,15 @@ function clamp(v, min, max) {
   return Math.max(min, Math.min(max, v));
 }
 
+function triggerBlobDownload(url, fileName) {
+  const a = document.createElement("a");
+  a.href = url;
+  a.download = fileName;
+  document.body.appendChild(a);
+  a.click();
+  a.remove();
+}
+
 function isMobileDevice() {
   return /Android|iPhone|iPad|iPod|Mobile/i.test(navigator.userAgent || "") || (window.innerWidth <= 820);
 }
@@ -97,7 +106,12 @@ function fixWebmBlobDuration(blob, durationSec) {
     const durationUnits = (safeSec * 1e9) / scaleNs;
     let patched = false;
 
-    for (let i = 0; i < bytes.length - 4; i++) {
+    // O elemento Duration (0x4489) fica dentro de Segment > Info, sempre perto
+    // do início do arquivo. Corrigir APENAS a primeira ocorrência e parar —
+    // aplicar em todo 0x44 0x89 encontrado corrompe clusters adiante no arquivo
+    // (era isso que gerava vídeos que não abriam).
+    const scanLimit = Math.min(bytes.length - 12, 4096);
+    for (let i = 0; i < scanLimit; i++) {
       if (bytes[i] === 0x44 && bytes[i + 1] === 0x89) {
         const sizeByte = bytes[i + 2];
         if (sizeByte === 0x88 && i + 11 <= bytes.length) {
@@ -107,6 +121,7 @@ function fixWebmBlobDuration(blob, durationSec) {
           view.setFloat32(i + 3, durationUnits, false);
           patched = true;
         }
+        if (patched) break;
       }
     }
 
@@ -940,16 +955,36 @@ function getSelectedExportFormatInfo() {
 }
 
 async function exportAndDownloadClip(clip) {
+  // Exporta primeiro: se a renderização falhar, nada é cobrado.
+  const result = await exportVerticalCut({
+    startOverride: clip.start,
+    endOverride: clip.end,
+    autoDownload: false,
+    fileName: `clipfactory_corte_${clip.idx}_${Math.round(clip.start)}s`
+  });
+  if (!result || !result.url) return;
+
+  // Desconto acontece somente quando o arquivo ficou pronto (download real).
   if (typeof window.authorizeClipDownload === "function") {
     const allowed = await window.authorizeClipDownload(clip, 1);
     if (!allowed) return;
   }
-  const { ext } = getSelectedExportFormatInfo();
-  await exportVerticalCut({
-    startOverride: clip.start,
-    endOverride: clip.end,
-    fileName: `clipfactory_corte_${clip.idx}_${Math.round(clip.start)}s_${Math.round(clip.end)}s.${ext}`
-  });
+  triggerBlobDownload(result.url, result.fileName);
+  setTimeout(() => URL.revokeObjectURL(result.url), 120000);
+}
+
+async function exportAndDownloadCurrent() {
+  const videoEl = $("videoEl");
+  if (!state.file || !videoEl.src) {
+    alert("Envie um vídeo primeiro.");
+    return;
+  }
+  const maxDur = resolveVideoDuration(videoEl);
+  const maxClipLen = (typeof window.HUB !== "undefined" && window.HUB.duracao) ? window.HUB.duracao : 30;
+  const startSec = state.activeClip ? state.activeClip.start : (videoEl.currentTime || 0);
+  const endSec = state.activeClip ? state.activeClip.end : Math.min(maxDur, startSec + maxClipLen);
+  const clip = state.activeClip || { idx: "atual", start: startSec, end: endSec };
+  await exportAndDownloadClip(clip);
 }
 
 function renderClipList() {
@@ -1000,17 +1035,20 @@ function renderClipList() {
     $("downloadAllLocalBtn").textContent = "⬇ Baixar todos os clipes";
     $("downloadAllLocalBtn").onclick = async () => {
       if (!state.clips.length) return;
-      if (typeof window.authorizeClipDownload === "function") {
-        const ok = await window.authorizeClipDownload(state.clips[0], state.clips.length);
-        if (!ok) return;
-      }
-      const { ext } = getSelectedExportFormatInfo();
       for (const c of state.clips) {
-        await exportVerticalCut({
+        const result = await exportVerticalCut({
           startOverride: c.start,
           endOverride: c.end,
-          fileName: `clipfactory_corte_${c.idx}.${ext}`
+          autoDownload: false,
+          fileName: `clipfactory_corte_${c.idx}`
         });
+        if (!result || !result.url) continue;
+        if (typeof window.authorizeClipDownload === "function") {
+          const ok = await window.authorizeClipDownload(c, 1);
+          if (!ok) break;
+        }
+        triggerBlobDownload(result.url, result.fileName);
+        setTimeout(() => URL.revokeObjectURL(result.url), 120000);
       }
     };
   }
@@ -1397,7 +1435,7 @@ async function exportVerticalCut(opts = {}) {
   if (btn) btn.disabled = true;
   state.isExporting = true;
   if ($("expResult")) $("expResult").innerHTML = "";
-  setExportLog(`Preparando ${fmtInfo.ext.toUpperCase()} (${spec.w}×${spec.h} · ${spec.fps} fps)...`, 8);
+    setExportLog(`Preparando exportação (${spec.w}×${spec.h} · ${spec.fps} fps)...`, 8);
 
   let videoStream = null;
   let audioCtx = null;
@@ -1437,13 +1475,20 @@ async function exportVerticalCut(opts = {}) {
 
     combinedStream = new MediaStream(tracks);
 
+    // MP4 primeiro quando o navegador suporta gravar MP4 nativamente:
+    // o container sai com duração e índice corretos (sem 00:00, seek funcional).
+    // Se não houver suporte, cai para WebM + correção de duração no EBML.
     const candidateMimeTypes = [
-      "video/webm;codecs=vp8,opus",
+      "video/mp4;codecs=avc1.42E01E,mp4a.40.2",
+      "video/mp4;codecs=avc1,mp4a.40.2",
+      "video/mp4",
       "video/webm;codecs=vp9,opus",
+      "video/webm;codecs=vp8,opus",
       "video/webm;codecs=vp8",
       "video/webm"
     ];
     const mimeType = candidateMimeTypes.find(m => MediaRecorder.isTypeSupported(m)) || "video/webm";
+    const isMp4Recording = mimeType.indexOf("mp4") !== -1;
 
     recorder = new MediaRecorder(combinedStream, {
       mimeType,
@@ -1505,7 +1550,7 @@ async function exportVerticalCut(opts = {}) {
       if (nowMs - lastUiUpdate > 160) {
         lastUiUpdate = nowMs;
         const pct = 10 + clamp(((videoEl.currentTime - startSec) / actualDurationSec) * 82, 0, 82);
-        setExportLog(`Renderizando ${fmtInfo.ext.toUpperCase()} ${spec.fps}fps · ${fmt(videoEl.currentTime)} / ${fmt(endSec)}...`, pct);
+        setExportLog(`Renderizando ${spec.fps}fps · ${fmt(videoEl.currentTime)} / ${fmt(endSec)}...`, pct);
       }
     };
 
@@ -1545,7 +1590,10 @@ async function exportVerticalCut(opts = {}) {
       }
 
       videoEl.addEventListener("ended", finish, { once: true });
-      setTimeout(finish, Math.ceil((actualDurationSec + 1.5) * 1000));
+      // Folga generosa: se o vídeo renderiza mais lento que tempo real (canvas
+      // pesado), o gravador continua até atingir o fim do trecho em vez de
+      // terminar no meio e cortar o vídeo.
+      setTimeout(finish, Math.ceil((actualDurationSec * 2 + 6) * 1000));
     });
 
     videoEl.pause();
@@ -1564,8 +1612,10 @@ async function exportVerticalCut(opts = {}) {
     try { combinedStream?.getTracks().forEach(t => t.stop()); } catch (e) {}
     try { videoStream?.getTracks().forEach(t => t.stop()); } catch (e) {}
 
-    let finalBlob = await fixWebmBlobDuration(rawBlob, actualDurationSec);
-    let outName = opts.fileName || `clipfactory_corte_${spec.w}x${spec.h}_${spec.fps}fps.${fmtInfo.ext}`;
+    const recExt = fmtInfo.isAvi ? "avi" : (isMp4Recording ? "mp4" : "webm");
+    let finalBlob = isMp4Recording ? rawBlob : await fixWebmBlobDuration(rawBlob, actualDurationSec);
+    let outName = opts.fileName || `clipfactory_corte_${spec.w}x${spec.h}_${spec.fps}fps`;
+    outName = outName.replace(/\.[^.]+$/, "") + "." + recExt;
 
     if (fmtInfo.isAvi) {
       if (!aviFrames.length) {
@@ -1577,16 +1627,13 @@ async function exportVerticalCut(opts = {}) {
         aviFrames.push(bytes);
       }
       finalBlob = buildAviFromJpegFrames(aviFrames, spec.w, spec.h, spec.fps);
-      if (!outName.toLowerCase().endsWith(".avi")) {
-        outName = outName.replace(/\.[^.]+$/, "") + ".avi";
-      }
     }
 
     offCanvas.width = 1;
     offCanvas.height = 1;
 
     const url = URL.createObjectURL(finalBlob);
-    setExportLog(`Corte ${fmtInfo.ext.toUpperCase()} (${spec.fps} fps · ${fmt(actualDurationSec)}) pronto!`, 100);
+    setExportLog(`Corte ${recExt.toUpperCase()} (${spec.fps} fps · ${fmt(actualDurationSec)}) pronto!`, 100);
     if ($("expResult")) {
       const thumbImg = thumbDataUrl
         ? `<img src="${thumbDataUrl}" alt="Miniatura do corte" style="width:54px;height:96px;object-fit:cover;border-radius:8px;border:1px solid var(--border2);margin-right:10px;vertical-align:middle">`
@@ -1594,15 +1641,17 @@ async function exportVerticalCut(opts = {}) {
       $("expResult").innerHTML = `
         <div style="display:flex;align-items:center;margin-top:10px">
           ${thumbImg}
-          <a class="dl" style="margin-top:0" href="${url}" download="${outName}">⬇ Baixar ${fmtInfo.ext.toUpperCase()} ${spec.fps}fps (${fmt(actualDurationSec)})</a>
+          <a class="dl" style="margin-top:0" href="${url}" download="${outName}">⬇ Baixar ${recExt.toUpperCase()} ${spec.fps}fps (${fmt(actualDurationSec)})</a>
         </div>`;
     }
-    const a = document.createElement("a");
-    a.href = url;
-    a.download = outName;
-    document.body.appendChild(a);
-    a.click();
-    a.remove();
+
+    // Com autoDownload === false, devolve o blob pronto para o chamador cobrar
+    // a cota/credits ANTES de entregar o arquivo (desconto garantido no download).
+    if (opts.autoDownload === false) {
+      return { blob: finalBlob, url, fileName: outName, durationSec: actualDurationSec };
+    }
+    triggerBlobDownload(url, outName);
+    setTimeout(() => URL.revokeObjectURL(url), 120000);
   } catch (err) {
     if (recorder && recorder.state !== "inactive") {
       try { recorder.stop(); } catch (e) {}
@@ -1643,7 +1692,7 @@ window.addEventListener("DOMContentLoaded", () => {
 
   if ($("newVidBtn")) $("newVidBtn").onclick = resetToStep1;
   if ($("analyzeBtn")) $("analyzeBtn").onclick = analyzeMoments;
-  if ($("exportBtn")) $("exportBtn").onclick = () => exportVerticalCut();
+  if ($("exportBtn")) $("exportBtn").onclick = exportAndDownloadCurrent;
   setLayoutMode("split");
 
   const cardObs = new MutationObserver(() => initCollapsibleCards());

@@ -1104,13 +1104,6 @@ async function analyzeMoments() {
 function selectClip(clip) {
   state.activeClip = clip;
   $("videoEl").currentTime = clip.start;
-  // Pré-preenche o título viral do corte no campo de gancho caso esteja vazio
-  if (clip && clip.viral_title && $("hookText") && !$("hookText").value.trim()) {
-    state.hook.text = clip.viral_title;
-    $("hookText").value = clip.viral_title;
-    state.hook.enabled = true;
-    syncHookToggleLabel();
-  }
   updateTimeline();
 }
 
@@ -1198,10 +1191,11 @@ function getSelectedExportFormatInfo() {
 }
 
 function buildClipExportFileName(clip, durationSec) {
-  const rawTitle = (clip && clip.viral_title)
-    ? clip.viral_title
-    : (state.hook.text && state.hook.text.trim())
-      ? state.hook.text.trim()
+  const customHook = (state.hook.text && state.hook.text.trim()) ? state.hook.text.trim() : "";
+  const rawTitle = customHook
+    ? customHook
+    : (clip && clip.viral_title)
+      ? clip.viral_title
       : (VIRAL_TITLES[0] || `clipfactory_corte_${clip?.idx || 1}`);
   const safeTitle = sanitizeFilename(rawTitle, `clipfactory_corte_${clip?.idx || 1}`);
   const tagsClean = (clip && Array.isArray(clip.hashtags) && clip.hashtags.length)
@@ -1686,10 +1680,10 @@ function drawFrameToCanvas(videoEl, canvas, nowSec, showSplitGuide = false, clip
 
   const refClip = clipOverride || state.activeClip;
 
-  // Título / Gancho visual: usa o gancho configurado ou automaticamente o título viral do corte
+  // Título / Gancho visual: exibe apenas se estiver explicitamente ativado e com texto preenchido
   const hookTitleText = (state.hook.enabled && state.hook.text && state.hook.text.trim())
     ? state.hook.text.trim()
-    : (refClip && refClip.viral_title ? refClip.viral_title : "");
+    : "";
 
   if (hookTitleText) {
     const baseHookSz = +($("hookSz")?.value) || 54;

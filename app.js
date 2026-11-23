@@ -27,8 +27,8 @@ const state = {
     y: 0.78
   },
   hook: {
-    enabled: true,
-    text: "ESSA JOGADA É IRREAL! 🔥",
+    enabled: false,
+    text: "",
     font: "Bebas Neue",
     color: "#ffd166",
     bg: "box",
@@ -65,6 +65,32 @@ function setExportLog(msg, pct = null) {
   if (pct !== null && $("expProgIn")) {
     $("expProgIn").style.width = `${clamp(pct, 0, 100)}%`;
   }
+}
+
+/* ============================================================
+   Patch EBML / WebM Duration so players display exact length instead of 0:00
+   ============================================================ */
+function findFloat64Offset(bytes, targetMs) {
+  const view = new DataView(bytes.buffer, bytes.byteOffset, bytes.byteLength);
+  // Look for WebM Duration element ID 0x44 0x89 followed by 0x88 (8-byte float)
+  for (let i = 0; i < bytes.length - 11; i++) {
+    if (bytes[i] === 0x44 && bytes[i + 1] === 0x89 && bytes[i + 2] === 0x88) {
+      return i + 3;
+    }
+  }
+  return -1;
+}
+
+function fixWebmBlobDuration(blob, durationSec) {
+  return blob.arrayBuffer().then((buf) => {
+    const bytes = new Uint8Array(buf);
+    const durOffset = findFloat64Offset(bytes);
+    if (durOffset !== -1 && durOffset + 8 <= bytes.length) {
+      const view = new DataView(bytes.buffer, bytes.byteOffset, bytes.byteLength);
+      view.setFloat64(durOffset, Math.max(0.1, Number(durationSec) || 1), false);
+    }
+    return new Blob([bytes], { type: blob.type || "video/webm" });
+  }).catch(() => blob);
 }
 
 function applyStyleToTarget(target, preset) {
@@ -123,6 +149,11 @@ function buildSwatches(containerId, colors, onSelect, initialColor) {
   });
 }
 
+function syncHookToggleLabel() {
+  if (!$("hookToggle")) return;
+  $("hookToggle").textContent = state.hook.enabled ? "👁 Gancho ativo (ocultar)" : "🙈 Gancho desativado (ativar)";
+}
+
 function initStyleControls() {
   buildPresetGrid("capPresets", CAP_PRESETS, state.capStyle);
   buildPresetGrid("hookPresets", HOOK_PRESETS, state.hook);
@@ -138,7 +169,16 @@ function initStyleControls() {
 
   if ($("hookText")) {
     $("hookText").value = state.hook.text;
-    $("hookText").oninput = e => { state.hook.text = e.target.value; };
+    $("hookText").oninput = e => {
+      state.hook.text = e.target.value;
+      // Automatically activate hook when user types non-empty text
+      if (state.hook.text.trim().length > 0) {
+        state.hook.enabled = true;
+      } else {
+        state.hook.enabled = false;
+      }
+      syncHookToggleLabel();
+    };
   }
   if ($("hookFont")) {
     $("hookFont").value = state.hook.font;
@@ -154,9 +194,14 @@ function initStyleControls() {
   }
 
   if ($("hookToggle")) {
+    syncHookToggleLabel();
     $("hookToggle").onclick = () => {
       state.hook.enabled = !state.hook.enabled;
-      $("hookToggle").textContent = state.hook.enabled ? "👁 Mostrar/ocultar" : "🙈 Oculto";
+      if (state.hook.enabled && !state.hook.text.trim()) {
+        state.hook.text = "GANCHO EM DESTAQUE 🔥";
+        if ($("hookText")) $("hookText").value = state.hook.text;
+      }
+      syncHookToggleLabel();
     };
   }
 }
@@ -615,6 +660,9 @@ function selectClip(clip) {
   updateTimeline();
 }
 
+/* ============================================================
+   Vertical 9:16 Live Preview Modal for a selected clip
+   ============================================================ */
 function openClipPreviewModal(clip) {
   const existing = document.getElementById("clipPreviewModal");
   if (existing) existing.remove();
@@ -623,41 +671,50 @@ function openClipPreviewModal(clip) {
   modal.id = "clipPreviewModal";
   modal.className = "clipModalBackdrop";
 
-  const previewUrl = state.videoUrl;
   const startSec = Number(clip.start || 0);
   const endSec = Number(clip.end || (startSec + 30));
 
   modal.innerHTML = `
-    <div class="clipModalBox">
-      <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:10px">
-        <b>👁 Visualizar Clipe #${clip.idx} (${fmt(startSec)} → ${fmt(endSec)})</b>
+    <div class="clipModalBox" style="max-width:360px;display:flex;flex-direction:column;align-items:center">
+      <div style="width:100%;display:flex;align-items:center;justify-content:space-between;margin-bottom:10px">
+        <b>📱 Prévia Vertical 9:16 · Clipe #${clip.idx}</b>
         <button type="button" class="ghost small" id="closeClipModalBtn">✕</button>
       </div>
-      <video id="modalClipVideo" src="${previewUrl}" controls playsinline style="width:100%;max-height:58vh;border-radius:10px;background:#000"></video>
-      <div class="signal" style="margin-top:8px">🎯 ${clip.viral_title || ""}</div>
-      <div class="row" style="margin-top:12px;gap:8px">
-        <button type="button" class="ghost small" id="modalLoopBtn" style="flex:1">🔁 Repetir trecho</button>
+      <canvas id="modalVerticalCanvas" width="540" height="960" style="width:100%;max-width:270px;aspect-ratio:9/16;border-radius:14px;border:1px solid var(--border2);background:#000"></canvas>
+      <div class="signal" style="margin-top:8px;text-align:center">${fmt(startSec)} → ${fmt(endSec)} · ${clip.viral_title || ""}</div>
+      <div class="row" style="width:100%;margin-top:12px;gap:8px">
+        <button type="button" class="ghost small" id="modalLoopBtn" style="flex:1">🔁 Repetir</button>
         <button type="button" class="small" id="modalDownloadClipBtn" style="flex:1">⬇ Baixar clipe</button>
       </div>
     </div>
   `;
 
   document.body.appendChild(modal);
-  const vid = modal.querySelector("#modalClipVideo");
-  vid.currentTime = startSec;
-  vid.play().catch(() => {});
+  const mainVid = $("videoEl");
+  const prevMainTime = mainVid.currentTime || 0;
+  const wasPaused = mainVid.paused;
+  const vCanvas = modal.querySelector("#modalVerticalCanvas");
 
-  const onTick = () => {
-    if (vid.currentTime >= endSec) {
-      vid.currentTime = startSec;
-      vid.play().catch(() => {});
+  mainVid.currentTime = startSec;
+  mainVid.play().catch(() => {});
+
+  let rafId = 0;
+  const renderModalLoop = (ts) => {
+    if (!document.getElementById("clipPreviewModal")) return;
+    if (mainVid.currentTime >= endSec) {
+      mainVid.currentTime = startSec;
+      mainVid.play().catch(() => {});
     }
+    drawFrameToCanvas(mainVid, vCanvas, (ts || 0) / 1000, false);
+    rafId = requestAnimationFrame(renderModalLoop);
   };
-  vid.addEventListener("timeupdate", onTick);
+  rafId = requestAnimationFrame(renderModalLoop);
 
   const closeModal = () => {
-    vid.pause();
-    vid.removeEventListener("timeupdate", onTick);
+    if (rafId) cancelAnimationFrame(rafId);
+    mainVid.pause();
+    mainVid.currentTime = prevMainTime;
+    if (!wasPaused) mainVid.play().catch(() => {});
     modal.remove();
   };
 
@@ -666,8 +723,8 @@ function openClipPreviewModal(clip) {
     if (e.target === modal) closeModal();
   });
   modal.querySelector("#modalLoopBtn").onclick = () => {
-    vid.currentTime = startSec;
-    vid.play().catch(() => {});
+    mainVid.currentTime = startSec;
+    mainVid.play().catch(() => {});
   };
   modal.querySelector("#modalDownloadClipBtn").onclick = async () => {
     closeModal();
@@ -747,7 +804,7 @@ function renderClipList() {
 }
 
 function getActiveCaption(currentTime) {
-  return state.captions.find(c => currentTime >= c.start && currentTime <= c.end) || null;
+  return state.captions.find(c => c.text && c.text.trim().length > 0 && currentTime >= c.start && currentTime <= c.end) || null;
 }
 
 function renderCaptionList() {
@@ -760,7 +817,7 @@ function renderCaptionList() {
     row.innerHTML = `
       <input type="number" step="0.5" min="0" value="${cue.start}" title="Início (s)">
       <input type="number" step="0.5" min="0" value="${cue.end}" title="Fim (s)">
-      <input type="text" value="${cue.text.replace(/"/g, "&quot;")}" placeholder="Texto da legenda">
+      <input type="text" value="${cue.text.replace(/"/g, "&quot;")}" placeholder="Digite a legenda">
       <button type="button" title="Remover">✕</button>
     `;
     const [inStart, inEnd, inText, delBtn] = row.children;
@@ -776,8 +833,9 @@ function renderCaptionList() {
 }
 
 function exportSrt() {
-  if (!state.captions.length) {
-    alert("Adicione ao menos uma legenda antes de exportar o .SRT.");
+  const validCaps = state.captions.filter(c => c.text && c.text.trim());
+  if (!validCaps.length) {
+    alert("Adicione ao menos uma legenda com texto antes de exportar o .SRT.");
     return;
   }
   const toSrtTime = (sec) => {
@@ -789,7 +847,7 @@ function exportSrt() {
     return `${hh}:${mm}:${ss},${String(ms).padStart(3, "0")}`;
   };
 
-  const srt = state.captions.map((c, idx) => `${idx + 1}\n${toSrtTime(c.start)} --> ${toSrtTime(c.end)}\n${c.text}\n`).join("\n");
+  const srt = validCaps.map((c, idx) => `${idx + 1}\n${toSrtTime(c.start)} --> ${toSrtTime(c.end)}\n${c.text}\n`).join("\n");
   const blob = new Blob([srt], { type: "text/srt;charset=utf-8" });
   const a = document.createElement("a");
   a.href = URL.createObjectURL(blob);
@@ -801,7 +859,7 @@ function initCaptions() {
   if ($("addCapBtn")) {
     $("addCapBtn").onclick = () => {
       const t = Math.floor(($("videoEl").currentTime || 0) * 10) / 10;
-      state.captions.push({ start: t, end: t + 3, text: "NOVA LEGENDA" });
+      state.captions.push({ start: t, end: t + 4, text: "" });
       renderCaptionList();
     };
   }
@@ -887,7 +945,7 @@ function drawAspectFillCrop(ctx, videoEl, crop, dx, dy, dw, dh) {
 }
 
 function drawStyledText(ctx, text, xNorm, yNorm, fontSize, styleObj, timeSec) {
-  if (!text) return;
+  if (!text || !text.trim()) return;
   const W = ctx.canvas.width;
   const H = ctx.canvas.height;
   let displayText = text;
@@ -1011,12 +1069,14 @@ function drawFrameToCanvas(videoEl, canvas, nowSec, showSplitGuide = false) {
     }
   }
 
-  if (state.hook.enabled && state.hook.text) {
+  // Hook only renders when explicitly enabled AND text is non-empty
+  if (state.hook.enabled && state.hook.text && state.hook.text.trim()) {
     drawStyledText(ctx, state.hook.text, state.hook.x, state.hook.y, +($("hookSz")?.value) || 64, state.hook, nowSec);
   }
 
+  // Captions only render when a caption cue has non-empty text
   const activeCue = getActiveCaption(videoEl.currentTime || 0);
-  if (activeCue && activeCue.text) {
+  if (activeCue && activeCue.text && activeCue.text.trim()) {
     drawStyledText(ctx, activeCue.text, state.capStyle.x, state.capStyle.y, +($("fontSz")?.value) || 48, state.capStyle, nowSec);
   }
 }
@@ -1116,6 +1176,8 @@ async function exportVerticalCut(opts = {}) {
     ? opts.endOverride
     : (state.activeClip ? state.activeClip.end : Math.min(maxDur, startSec + maxClipLen));
 
+  const actualDurationSec = Math.max(0.5, endSec - startSec);
+
   const offCanvas = document.createElement("canvas");
   offCanvas.width = spec.w;
   offCanvas.height = spec.h;
@@ -1137,7 +1199,6 @@ async function exportVerticalCut(opts = {}) {
     videoStream = offCanvas.captureStream(spec.fps);
     const tracks = [...videoStream.getVideoTracks()];
 
-    // Capture audio track from video element using Web Audio API
     try {
       const AudioCtx = window.AudioContext || window.webkitAudioContext;
       if (AudioCtx) {
@@ -1148,12 +1209,11 @@ async function exportVerticalCut(opts = {}) {
         audioSource = audioCtx.createMediaElementSource(videoEl);
         audioDest = audioCtx.createMediaStreamDestination();
         audioSource.connect(audioDest);
-        // Also route to speakers so user can hear during preview/export if desired
         audioSource.connect(audioCtx.destination);
         audioDest.stream.getAudioTracks().forEach(t => tracks.push(t));
       }
     } catch (audioErr) {
-      console.warn("Áudio não pôde ser anexado via WebAudio:", audioErr);
+      console.warn("Áudio WebAudio:", audioErr);
     }
 
     combinedStream = new MediaStream(tracks);
@@ -1199,22 +1259,21 @@ async function exportVerticalCut(opts = {}) {
       }, 1500);
     });
 
-    recorder.start(500);
+    recorder.start(250);
     await videoEl.play().catch(() => {});
 
-    const totalSpan = Math.max(0.5, endSec - startSec);
     const frameDelay = Math.max(33, Math.floor(1000 / spec.fps));
 
     while (!videoEl.paused && !videoEl.ended && videoEl.currentTime < endSec) {
       drawFrameToCanvas(videoEl, offCanvas, videoEl.currentTime, false);
-      const pct = 10 + clamp(((videoEl.currentTime - startSec) / totalSpan) * 82, 0, 82);
-      setExportLog(`Renderizando com áudio ${fmt(videoEl.currentTime)} / ${fmt(endSec)}...`, pct);
+      const pct = 10 + clamp(((videoEl.currentTime - startSec) / actualDurationSec) * 82, 0, 82);
+      setExportLog(`Renderizando ${fmt(videoEl.currentTime)} / ${fmt(endSec)}...`, pct);
       await new Promise(r => setTimeout(r, frameDelay));
     }
 
     videoEl.pause();
     if (recorder.state !== "inactive") recorder.stop();
-    const webmBlob = await donePromise;
+    const rawBlob = await donePromise;
     chunks.length = 0;
 
     try { audioSource?.disconnect(); } catch (e) {}
@@ -1225,13 +1284,15 @@ async function exportVerticalCut(opts = {}) {
     offCanvas.width = 1;
     offCanvas.height = 1;
 
-    const url = URL.createObjectURL(webmBlob);
+    // Patch EBML duration metadata so 0:00 bug is fixed in players
+    const fixedBlob = await fixWebmBlobDuration(rawBlob, actualDurationSec);
+
+    const url = URL.createObjectURL(fixedBlob);
     const outName = opts.fileName || `clipfactory_corte_${spec.w}x${spec.h}.webm`;
-    setExportLog("Corte exportado com áudio e duração correta!", 100);
+    setExportLog(`Corte exportado (${fmt(actualDurationSec)}) pronto para reproduzir!`, 100);
     if ($("expResult")) {
-      $("expResult").innerHTML = `<a class="dl" href="${url}" download="${outName}">⬇ Baixar corte (.webm)</a>`;
+      $("expResult").innerHTML = `<a class="dl" href="${url}" download="${outName}">⬇ Baixar corte (${fmt(actualDurationSec)})</a>`;
     }
-    // Trigger automatic download
     const a = document.createElement("a");
     a.href = url;
     a.download = outName;
@@ -1282,7 +1343,6 @@ window.addEventListener("DOMContentLoaded", () => {
   if ($("exportBtn")) $("exportBtn").onclick = () => exportVerticalCut();
   setLayoutMode("split");
 
-  // Re-bind any dynamically added cards
   const cardObs = new MutationObserver(() => initCollapsibleCards());
   cardObs.observe(document.body, { childList: true, subtree: true });
 });

@@ -1,6 +1,6 @@
 /* ============================================================
    Integração Hub WaveCombat — Supabase (assinaturas + creditos_videos + carteira_diamantes)
-   v0.004: Cobrança apenas no DOWNLOAD + contador de vídeos disponíveis + compra avulsa cumulativa
+   v0.005: Assinatura semanal (7 dias) com cota diária de 20 clipes + desconto real no download
    ============================================================ */
 "use strict";
 
@@ -8,10 +8,14 @@ const SUPABASE_URL = "https://ipqjeacdfiomcxfuixdj.supabase.co";
 const SUPABASE_KEY = "sb_publishable_EWW84q_43YbOvMwB_Rua-A_X465PbLP";
 
 const PLANOS = {
-  pack5:  { label: "5 clipes",          custo: 100,  n: 5,  desc: "adiciona +5 vídeos" },
-  pack10: { label: "10 clipes",         custo: 200,  n: 10, desc: "adiciona +10 vídeos" },
-  weekly: { label: "Assinatura 7 dias", custo: 1000, n: 20, desc: "20 clipes/dia · 2K 60fps" },
+  pack5:  { label: "5 clipes",          custo: 100,  n: 5,  desc: "+5 vídeos avulsos" },
+  pack10: { label: "10 clipes",         custo: 200,  n: 10, desc: "+10 vídeos avulsos" },
+  weekly: { label: "Assinatura 7 dias", custo: 1000, n: 20, desc: "20 clipes/dia · 7 dias" },
 };
+
+function todayIsoDate() {
+  return new Date().toISOString().slice(0, 10);
+}
 
 function resolveInitialPlayerId() {
   const fromUrl = new URLSearchParams(window.location.search).get("id");
@@ -42,9 +46,6 @@ const HUB = {
   },
   plano: new URLSearchParams(window.location.search).get("plano") || "pack5",
   duracao: 30,
-  activeJobId: null,
-  activeJobStatus: null,
-  pollTimer: null,
   deferredInstallPrompt: null,
 };
 
@@ -57,17 +58,17 @@ function getSupabase() {
 
 function getAvailableVideosSummary() {
   const hasWeekly = !!(HUB.sub && HUB.sub.ativa);
-  const weeklyLimit = Number(HUB.sub?.limite_diario || 20);
-  const weeklyUsed = Number(HUB.sub?.clipes_hoje || 0);
-  const weeklyRemaining = hasWeekly ? Math.max(0, weeklyLimit - weeklyUsed) : 0;
+  const dailyLimit = Number(HUB.sub?.limite_diario || 20);
+  const usedToday = Number(HUB.sub?.clipes_hoje || 0);
+  const dailyRemaining = hasWeekly ? Math.max(0, dailyLimit - usedToday) : 0;
 
   const extraRemaining = Math.max(0, Number(HUB.extraCredits?.videos_restantes || 0));
   const extraTotal = Math.max(0, Number(HUB.extraCredits?.videos_comprados_total || 0));
 
-  const totalAvailable = weeklyRemaining + extraRemaining;
+  const totalAvailable = dailyRemaining + extraRemaining;
   const parts = [];
   if (hasWeekly) {
-    parts.push(`${weeklyRemaining}/${weeklyLimit} semanal`);
+    parts.push(`${dailyRemaining}/${dailyLimit} hoje`);
   }
   if (extraRemaining > 0 || extraTotal > 0 || !hasWeekly) {
     const denom = extraTotal > 0 ? extraTotal : Math.max(extraRemaining, 10);
@@ -76,9 +77,9 @@ function getAvailableVideosSummary() {
 
   return {
     hasWeekly,
-    weeklyLimit,
-    weeklyUsed,
-    weeklyRemaining,
+    dailyLimit,
+    usedToday,
+    dailyRemaining,
     extraRemaining,
     extraTotal,
     totalAvailable,
@@ -132,8 +133,8 @@ function renderWalletBar(msg, kind) {
     <span>👤 <b>${HUB.nick ?? "carregando…"}</b> <span style="color:var(--muted)">(ID ${HUB.playerId})</span></span>
     <span style="margin-left:auto;display:flex;align-items:center;gap:10px;flex-wrap:wrap">
       <span>${saldo} diamantes</span>
-      <span>🎬 <b style="color:#4ade80">${vids.label}</b> vídeos p/ baixar</span>
-      <button class="ghost small" id="walletRefresh">↻</button>
+      <span>🎬 <b id="walletVideosCount" style="color:#4ade80">${vids.label}</b> disponíveis p/ baixar</span>
+      <button type="button" class="ghost small" id="walletRefresh">↻</button>
     </span>
     ${msg ? `<div style="width:100%;margin-top:4px;color:${kind === "err" ? "var(--bad)" : "var(--good)"}">${msg}</div>` : ""}`;
 
@@ -212,20 +213,33 @@ async function addExtraCreditsToSupabase(qty) {
 }
 
 async function consumeOneVideoCreditForDownload() {
+  const todayStr = todayIsoDate();
   const hasWeekly = !!(HUB.sub && HUB.sub.ativa);
-  const weeklyLimit = Number(HUB.sub?.limite_diario || 20);
-  const weeklyUsed = Number(HUB.sub?.clipes_hoje || 0);
+  const dailyLimit = Number(HUB.sub?.limite_diario || 20);
+  let usedToday = (HUB.sub?.dia_uso === todayStr) ? Number(HUB.sub?.clipes_hoje || 0) : 0;
 
-  if (hasWeekly && weeklyUsed < weeklyLimit) {
-    const nextUsed = weeklyUsed + 1;
-    HUB.sub.clipes_hoje = nextUsed;
+  if (hasWeekly && usedToday < dailyLimit) {
+    usedToday += 1;
+    HUB.sub.clipes_hoje = usedToday;
+    HUB.sub.dia_uso = todayStr;
+    HUB.sub.limite_diario = dailyLimit;
+
     const sb = getSupabase();
-    const todayStr = new Date().toISOString().slice(0, 10);
-    await sb
+    const { error } = await sb
       .from("assinaturas")
-      .update({ clipes_hoje: nextUsed, dia_uso: todayStr, updated_at: new Date().toISOString() })
+      .update({
+        clipes_hoje: usedToday,
+        dia_uso: todayStr,
+        updated_at: new Date().toISOString()
+      })
       .eq("id_jogador", HUB.playerId);
-    renderWalletBar(`🎬 Download liberado pelo plano semanal (${Math.max(0, weeklyLimit - nextUsed)}/${weeklyLimit} hoje)`, "ok");
+
+    if (error) {
+      console.warn("Erro ao atualizar cota diária:", error.message);
+    }
+
+    const remToday = Math.max(0, dailyLimit - usedToday);
+    renderWalletBar(`🎬 1 vídeo descontado da cota diária (${remToday}/${dailyLimit} restantes hoje)`, "ok");
     await refreshPremiumPanel();
     return true;
   }
@@ -240,7 +254,7 @@ async function consumeOneVideoCreditForDownload() {
         .update({ videos_restantes: nextRem, updated_at: new Date().toISOString() })
         .eq("id_jogador", HUB.playerId);
     }
-    renderWalletBar(`🎬 1 crédito avulso usado (${nextRem}/${Math.max(nextRem, HUB.extraCredits.videos_comprados_total)} restantes)`, "ok");
+    renderWalletBar(`🎬 1 vídeo avulso descontado (${nextRem}/${Math.max(nextRem, HUB.extraCredits.videos_comprados_total)} restantes)`, "ok");
     await refreshPremiumPanel();
     return true;
   }
@@ -251,11 +265,14 @@ async function consumeOneVideoCreditForDownload() {
 window.authorizeClipDownload = async function(clip, count = 1) {
   if (!HUB.playerId) return true;
   try {
+    // Refresh latest subscription & credits before deducting
+    HUB.sub = await fetchSubscriptionFromSupabase();
+    await loadExtraCredits();
+
     let remainingNeeded = count;
     while (remainingNeeded > 0) {
-      const usedCredit = await consumeOneVideoCreditForDownload();
-      if (!usedCredit) {
-        // Deduct 20 diamonds per video download when no video quota/credit remains
+      const usedQuotaOrCredit = await consumeOneVideoCreditForDownload();
+      if (!usedQuotaOrCredit) {
         const unitCost = 20;
         await debitDiamonds(unitCost, `Download de clipe #${clip?.idx || ""}`);
       }
@@ -280,12 +297,12 @@ async function fetchSubscriptionFromSupabase() {
     .maybeSingle();
 
   if (error) throw new Error(error.message);
-  if (!data) return { ativa: false };
+  if (!data) return { ativa: false, limite_diario: 20, clipes_hoje: 0, dia_uso: todayIsoDate() };
 
   const now = Date.now();
   const fimMs = data.fim ? new Date(data.fim).getTime() : 0;
   const ativa = fimMs > now;
-  const todayStr = new Date().toISOString().slice(0, 10);
+  const todayStr = todayIsoDate();
   const clipesHoje = (data.dia_uso === todayStr) ? Number(data.clipes_hoje || 0) : 0;
 
   return {
@@ -294,6 +311,7 @@ async function fetchSubscriptionFromSupabase() {
     fim: data.fim,
     limite_diario: Number(data.limite_diario || 20),
     clipes_hoje: clipesHoje,
+    dia_uso: todayStr,
     raw: data
   };
 }
@@ -304,7 +322,7 @@ async function injectPremiumPanel(col) {
   card.className = "card";
   card.id = "premiumPanel";
   card.innerHTML = `
-    <div class="card-h"><h2>⭐ Meu plano & créditos de vídeo</h2><button type="button" class="collapse-btn">▾</button></div>
+    <div class="card-h"><h2>⭐ Assinatura semanal & cota diária</h2><button type="button" class="collapse-btn">▾</button></div>
     <div class="card-body"><div id="premiumBody" class="signal">carregando…</div></div>`;
   col.prepend(card);
   if (typeof initCollapsibleCards === "function") initCollapsibleCards();
@@ -322,16 +340,16 @@ async function refreshPremiumPanel() {
     if (!s.ativa) {
       body.innerHTML = `
         <div class="stat">
-          <div><b>${vids.extraRemaining}/${Math.max(vids.extraRemaining, vids.extraTotal || 0)}</b>vídeos avulsos p/ baixar</div>
+          <div><b>${vids.extraRemaining}/${Math.max(vids.extraRemaining, vids.extraTotal || 0)}</b>avulsos p/ baixar</div>
           <div><b>${HUB.diamantes ?? 0}</b>💎 saldo</div>
-          <div><b>Semanal</b>inativo</div>
+          <div><b>7 dias</b>inativo</div>
         </div>
-        <p class="signal">A cobrança só ocorre ao <b>baixar</b> o vídeo. Compre pacotes avulsos (+5 / +10) ou ative <b>20 clipes/dia por 7 dias</b>.</p>
+        <p class="signal">O desconto acontece <b>somente no download</b>. Assinatura dura <b>7 dias</b> com cota diária de <b>20 vídeos/dia</b> (ou compre pacotes avulsos).</p>
         <div class="row" style="gap:8px;margin-top:8px">
           <button type="button" class="ghost small" id="buyPack5Btn" style="flex:1">+5 vídeos (💎 100)</button>
           <button type="button" class="ghost small" id="buyPack10Btn" style="flex:1">+10 vídeos (💎 200)</button>
         </div>
-        <button type="button" id="renovarWeeklyBtn" style="width:100%;margin-top:8px">⭐ Ativar 7 dias (💎 ${PLANOS.weekly.custo})</button>`;
+        <button type="button" id="renovarWeeklyBtn" style="width:100%;margin-top:8px">⭐ Assinar 7 dias · 20/dia (💎 ${PLANOS.weekly.custo})</button>`;
       body.querySelector("#buyPack5Btn").onclick = () => buyExtraPack("pack5");
       body.querySelector("#buyPack10Btn").onclick = () => buyExtraPack("pack10");
       body.querySelector("#renovarWeeklyBtn").onclick = subscribeWeekly;
@@ -342,18 +360,18 @@ async function refreshPremiumPanel() {
     const fim = new Date(s.fim);
     const dias = Math.max(0, Math.ceil((fim - Date.now()) / 86400000));
     body.innerHTML = `
-      <span class="badgePremium">⭐ PREMIUM ATIVO</span>
+      <span class="badgePremium">⭐ ASSINATURA 7 DIAS ATIVA</span>
       <div class="stat">
-        <div><b>${vids.weeklyRemaining}/${vids.weeklyLimit}</b>semanal hoje</div>
+        <div><b>${vids.dailyRemaining}/${vids.dailyLimit}</b>hoje (20/dia)</div>
         <div><b>${vids.extraRemaining}/${Math.max(vids.extraRemaining, vids.extraTotal)}</b>avulso extra</div>
         <div><b>${dias}</b>dias restantes</div>
       </div>
-      <p class="signal">Plano válido até <b>${fim.toLocaleDateString("pt-BR")} ${fim.toLocaleTimeString("pt-BR", { hour: "2-digit", minute: "2-digit" })}</b>. Você também pode comprar mais vídeos avulsos e somar à sua conta!</p>
+      <p class="signal">Assinatura válida por 7 dias até <b>${fim.toLocaleDateString("pt-BR")} ${fim.toLocaleTimeString("pt-BR", { hour: "2-digit", minute: "2-digit" })}</b> — cota de <b>20 vídeos por dia</b> (renovada diariamente).</p>
       <div class="row" style="gap:8px;margin-top:6px">
         <button type="button" class="ghost small" id="buyPack5Btn" style="flex:1">+5 vídeos (💎 100)</button>
         <button type="button" class="ghost small" id="buyPack10Btn" style="flex:1">+10 vídeos (💎 200)</button>
       </div>
-      <button type="button" id="renovarWeeklyBtn" style="width:100%;margin-top:8px">🔄 Renovar +7 dias (💎 ${PLANOS.weekly.custo})</button>`;
+      <button type="button" id="renovarWeeklyBtn" style="width:100%;margin-top:8px">🔄 Renovar assinatura +7 dias (💎 ${PLANOS.weekly.custo})</button>`;
     body.querySelector("#buyPack5Btn").onclick = () => buyExtraPack("pack5");
     body.querySelector("#buyPack10Btn").onclick = () => buyExtraPack("pack10");
     body.querySelector("#renovarWeeklyBtn").onclick = subscribeWeekly;
@@ -426,7 +444,7 @@ async function refundDiamonds(amount, reasonLabel) {
 }
 
 async function subscribeWeekly() {
-  if (!confirm(`Ativar/renovar o plano semanal (7 dias · 20 clipes/dia) por 💎 ${PLANOS.weekly.custo}?`)) return;
+  if (!confirm(`Ativar/renovar a assinatura semanal (7 dias · 20 vídeos/dia) por 💎 ${PLANOS.weekly.custo}?`)) return;
   const cost = PLANOS.weekly.custo;
   try {
     await debitDiamonds(cost, "Assinatura 7 dias");
@@ -437,14 +455,14 @@ async function subscribeWeekly() {
       ? new Date(HUB.sub.fim).getTime()
       : now.getTime();
     const newFim = new Date(baseMs + 7 * 86400000);
-    const todayStr = now.toISOString().slice(0, 10);
+    const todayStr = todayIsoDate();
 
     const payload = {
       id_jogador: HUB.playerId,
       inicio: now.toISOString(),
       fim: newFim.toISOString(),
       limite_diario: 20,
-      clipes_hoje: HUB.sub?.clipes_hoje || 0,
+      clipes_hoje: HUB.sub?.dia_uso === todayStr ? (HUB.sub?.clipes_hoje || 0) : 0,
       dia_uso: todayStr,
       updated_at: now.toISOString()
     };
@@ -464,7 +482,7 @@ async function subscribeWeekly() {
       throw new Error(res.error.message);
     }
 
-    renderWalletBar("⭐ Plano semanal ativo por 7 dias!", "ok");
+    renderWalletBar("⭐ Assinatura 7 dias ativa (20 vídeos/dia)!", "ok");
     await refreshPremiumPanel();
     await loadWallet();
     updateHubButton();
@@ -498,7 +516,7 @@ function injectHubCard() {
         <button type="button" class="ghost small durBtn" data-dur="60" style="flex:1">⏱ 60 segundos</button>
       </div>
       <div class="row" style="margin-top:10px;gap:8px">
-        <button type="button" id="hubStartBtn" style="flex:1">🎬 Gerar vídeos (cobrança só no download)</button>
+        <button type="button" id="hubStartBtn" style="flex:1">🎬 Gerar cortes (cobrança só no download)</button>
         <button type="button" class="ghost small" id="hubBuySelectedBtn" style="flex:0 0 auto">💎 Comprar pacote</button>
       </div>
       <div id="hubJobInfo" class="signal" style="margin-top:8px"></div>
@@ -553,13 +571,13 @@ async function startHubJob() {
 
   try {
     btn.disabled = true;
-    info.innerHTML = `▸ Gerando sugestões de clipes de ${HUB.duracao}s na janela ${fmt(state.segStart)} → ${fmt(state.segEnd)} (nenhum diamante descontado ao gerar)…`;
+    info.innerHTML = `▸ Gerando sugestões de clipes de ${HUB.duracao}s na janela ${fmt(state.segStart)} → ${fmt(state.segEnd)} (nenhum desconto ao gerar)…`;
 
     if (typeof analyzeMoments === "function") {
       await analyzeMoments();
     }
 
-    info.innerHTML = `▸ Clipes prontos! Use <b>Visualizar</b> para assistir e <b>Baixar</b> para exportar (desconto ocorre apenas no download).`;
+    info.innerHTML = `▸ Clipes prontos! Use <b>Visualizar</b> para ver o preview vertical 9:16 e <b>Baixar</b> para exportar.`;
     btn.disabled = false;
     updateHubButton();
   } catch (e) {

@@ -33,7 +33,7 @@ const state = {
     text: "",
     line2: "",
     style: "none",
-    bgColor: "#c80000",
+    bannerBgColor: "#c80000",
     color1: "#ffffff",
     color2: "#ffd166",
     font: "Bebas Neue",
@@ -1705,9 +1705,9 @@ function drawHookBlock(ctx, W, H, scaleFactor, nowSec) {
   const by = cy - boxH / 2;
 
   if (style === "ripped") {
-    drawRippedBanner(ctx, bx, by, boxW, boxH, state.hook.bgColor || "#c80000", "#ffffff");
+    drawRippedBanner(ctx, bx, by, boxW, boxH, state.hook.bannerBgColor || state.hook.bgColor || "#c80000", "#ffffff");
   } else if (style === "box") {
-    ctx.fillStyle = state.hook.bgColor || "#c80000";
+    ctx.fillStyle = state.hook.bannerBgColor || state.hook.bgColor || "#c80000";
     ctx.beginPath();
     ctx.roundRect(bx, by, boxW, boxH, Math.round(14 * scaleFactor));
     ctx.fill();
@@ -2500,7 +2500,7 @@ window.addEventListener("DOMContentLoaded", () => {
     $("hookStyle").onchange = () => { state.hook.style = $("hookStyle").value; };
   }
   if ($("hookBgColor")) {
-    $("hookBgColor").oninput = () => { state.hook.bgColor = $("hookBgColor").value; };
+    $("hookBgColor").oninput = () => { state.hook.bannerBgColor = $("hookBgColor").value; };
   }
   if ($("hookColor1")) {
     $("hookColor1").oninput = () => { state.hook.color1 = $("hookColor1").value; };

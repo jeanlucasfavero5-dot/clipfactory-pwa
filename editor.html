@@ -211,6 +211,14 @@ a.dl{display:inline-block;margin-top:10px;background:linear-gradient(135deg,var(
   width: 100%;max-width: 440px;background: #07140e;border: 1px solid #1f5138;
   border-radius: 16px;padding: 16px;color: #e9fff2;box-shadow: 0 20px 60px rgba(0,0,0,0.85);
 }
+
+.right-acc-list{display:flex;flex-direction:column;gap:8px;margin-bottom:4px}
+.right-acc-list .card-h{padding:10px 14px;background:rgba(12,34,23,.65);border-radius:14px}
+.right-acc-list .card-body{max-height:420px;overflow-y:auto;padding-top:10px}
+.right-acc-list .card-body::-webkit-scrollbar{width:6px}
+.right-acc-list .card-body::-webkit-scrollbar-thumb{background:var(--border);border-radius:99px}
+.acc-quick-bar{display:flex;gap:6px;flex-wrap:wrap;margin-bottom:4px}
+
 </style>
 </head>
 <body>
@@ -304,6 +312,11 @@ a.dl{display:inline-block;margin-top:10px;background:linear-gradient(135deg,var(
     </div>
 
     <div>
+      <div class="acc-quick-bar">
+        <button type="button" class="ghost small" id="expandAllRightBtn">▾ Expandir tudo</button>
+        <button type="button" class="ghost small" id="collapseAllRightBtn">▸ Recolher tudo</button>
+      </div>
+      <div class="right-acc-list" id="rightAccordionList">
       <div class="card" id="cardPreview">
         <div class="card-h"><h2>4. Prévia vertical 9:16 — ao vivo</h2><button class="collapse-btn">▾</button></div>
         <div class="card-body">
@@ -500,12 +513,13 @@ a.dl{display:inline-block;margin-top:10px;background:linear-gradient(135deg,var(
           <div id="expResult"></div>
         </div>
       </div>
+      </div>
     </div>
   </section>
 </main>
 
 <div class="footer">ClipFactory × WaveCombat Hub — <a style="color:var(--acc2)" href="https://youtube.com/@capudooficial7?si=awSkNhuT4YY177Yp" target="_blank" rel="noopener">inscreva-se no canal ↗</a></div>
-<div id="appVersion">v0.019</div>
+<div id="appVersion">v0.020</div>
 
 <script src="https://cdn.jsdelivr.net/npm/ts-ebml@3.0.2/dist/EBML.min.js"></script>
 <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>

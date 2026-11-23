@@ -6,6 +6,7 @@ const state = {
   file: null,
   videoUrl: null,
   duration: 0,
+  clipDuration: 30,
   cropCam: { x: 0.04, y: 0.05, w: 0.32, h: 0.28 },
   cropGame: { x: 0.08, y: 0.25, w: 0.84, h: 0.68 },
   camOnTop: true,
@@ -40,6 +41,13 @@ const state = {
   draggingOverlay: null,
   isExporting: false
 };
+
+function getSelectedClipDurationSec() {
+  if (typeof window.HUB !== "undefined" && (Number(window.HUB.duracao) === 30 || Number(window.HUB.duracao) === 60)) {
+    return Number(window.HUB.duracao);
+  }
+  return (Number(state.clipDuration) === 60) ? 60 : 30;
+}
 
 function fmt(sec) {
   sec = Math.max(0, Number(sec) || 0);
@@ -864,8 +872,9 @@ async function analyzeMoments() {
   const startSec = state.segStart || 0;
   const maxDur = state.duration || 60;
   const endSec = Math.max(startSec + 10, Math.min(maxDur, state.segEnd || maxDur));
-  const clipLen = (typeof window.HUB !== "undefined" && window.HUB.duracao) ? window.HUB.duracao : 30;
-  const step = Math.max(5, Math.floor(clipLen / 2));
+  const clipLen = getSelectedClipDurationSec();
+  state.clipDuration = clipLen;
+  const step = clipLen;
 
   let audioEnvelope = null;
   try {
@@ -924,14 +933,32 @@ async function analyzeMoments() {
     const rawScore = Math.round((50 * audioPeak) + (30 * motion) + (20 * intensity));
     const score = clamp(rawScore, 15, 99);
 
+    const clipEnd = Math.min(maxDur, t + clipLen);
     candidates.push({
       idx: candidates.length + 1,
       start: t,
-      end: Math.min(maxDur, t + clipLen),
+      end: clipEnd,
+      duration: Math.round(clipEnd - t),
       score,
       viral_title: VIRAL_TITLES[candidates.length % VIRAL_TITLES.length],
       hashtags: VIRAL_HASHTAGS[candidates.length % VIRAL_HASHTAGS.length].split(" "),
       signals: { audio_peak: audioPeak, motion, intensity },
+      thumb: null
+    });
+  }
+
+  if (!candidates.length && endSec > startSec) {
+    const safeStart = startSec;
+    const safeEnd = Math.min(maxDur, startSec + clipLen);
+    candidates.push({
+      idx: 1,
+      start: safeStart,
+      end: safeEnd,
+      duration: Math.round(safeEnd - safeStart),
+      score: 85,
+      viral_title: VIRAL_TITLES[0],
+      hashtags: VIRAL_HASHTAGS[0].split(" "),
+      signals: { audio_peak: 0.8, motion: 0.75, intensity: 0.7 },
       thumb: null
     });
   }
@@ -972,13 +999,15 @@ function openClipPreviewModal(clip) {
   modal.id = "clipPreviewModal";
   modal.className = "clipModalBackdrop";
 
+  const durSec = getSelectedClipDurationSec();
   const startSec = Number(clip.start || 0);
-  const endSec = Number(clip.end || (startSec + 30));
+  const maxDur = resolveVideoDuration($("videoEl"));
+  const endSec = Math.min(maxDur, startSec + durSec);
 
   modal.innerHTML = `
     <div class="clipModalBox" style="max-width:360px;display:flex;flex-direction:column;align-items:center">
       <div style="width:100%;display:flex;align-items:center;justify-content:space-between;margin-bottom:10px">
-        <b>📱 Prévia Vertical 9:16 · Clipe #${clip.idx}</b>
+        <b>📱 Prévia Vertical 9:16 · Clipe #${clip.idx} (${Math.round(endSec - startSec)}s)</b>
         <button type="button" class="ghost small" id="closeClipModalBtn">✕</button>
       </div>
       <canvas id="modalVerticalCanvas" width="540" height="960" style="width:100%;max-width:270px;aspect-ratio:9/16;border-radius:14px;border:1px solid var(--border2);background:#000"></canvas>
@@ -1029,7 +1058,7 @@ function openClipPreviewModal(clip) {
   };
   modal.querySelector("#modalDownloadClipBtn").onclick = async () => {
     closeModal();
-    await exportAndDownloadClip(clip);
+    await exportAndDownloadClip({ ...clip, start: startSec, end: endSec });
   };
 }
 
@@ -1050,11 +1079,16 @@ async function exportAndDownloadClip(clip) {
     if (!canProceed) return;
   }
 
+  const durSec = getSelectedClipDurationSec();
+  const maxDur = resolveVideoDuration($("videoEl"));
+  const startSec = Number(clip.start || 0);
+  const endSec = Math.min(maxDur, startSec + durSec);
+
   const result = await exportVerticalCut({
-    startOverride: clip.start,
-    endOverride: clip.end,
+    startOverride: startSec,
+    endOverride: endSec,
     autoDownload: false,
-    fileName: `clipfactory_corte_${clip.idx}_${Math.round(clip.start)}s`
+    fileName: `clipfactory_corte_${clip.idx}_${Math.round(endSec - startSec)}s`
   });
   if (!result || !result.url || !result.blob || result.blob.size < 1024) return;
 
@@ -1087,11 +1121,11 @@ async function exportAndDownloadCurrent() {
     return;
   }
   const maxDur = resolveVideoDuration(videoEl);
-  const maxClipLen = (typeof window.HUB !== "undefined" && window.HUB.duracao) ? window.HUB.duracao : 30;
+  const maxClipLen = getSelectedClipDurationSec();
   const startSec = state.activeClip ? state.activeClip.start : (videoEl.currentTime || 0);
-  const endSec = state.activeClip ? state.activeClip.end : Math.min(maxDur, startSec + maxClipLen);
+  const endSec = Math.min(maxDur, startSec + maxClipLen);
   const clip = state.activeClip || { idx: "atual", start: startSec, end: endSec };
-  await exportAndDownloadClip(clip);
+  await exportAndDownloadClip({ ...clip, start: startSec, end: endSec });
 }
 
 function renderClipList() {
@@ -1104,6 +1138,7 @@ function renderClipList() {
 
   list.innerHTML = state.clips.map((c, i) => {
     const color = c.score >= 70 ? "var(--good)" : c.score >= 45 ? "var(--warn)" : "var(--bad)";
+    const clipSec = Math.round(c.end - c.start);
     const thumbHtml = c.thumb
       ? `<img src="${c.thumb}" alt="Miniatura clipe ${c.idx}" style="width:46px;height:82px;object-fit:cover;border-radius:8px;border:1px solid var(--border);flex:none">`
       : "";
@@ -1112,7 +1147,7 @@ function renderClipList() {
         ${thumbHtml}
         <div class="score" style="border-color:${color}">${c.score}<small>NOTA</small></div>
         <div class="info">
-          <b>${fmt(c.start)} → ${fmt(c.end)}</b> (${Math.round(c.end - c.start)}s)
+          <b>${fmt(c.start)} → ${fmt(c.end)}</b> (${clipSec}s)
           <div class="viral">🎯 ${c.viral_title}</div>
           <div class="tags">${(c.hashtags || []).join(" ")}</div>
           <div class="signal">🔊 ${Math.round(c.signals.audio_peak * 100)}% · 🎬 ${Math.round(c.signals.motion * 100)}% · 🔥 ${Math.round(c.signals.intensity * 100)}%</div>
@@ -1151,7 +1186,7 @@ function renderClipList() {
           startOverride: c.start,
           endOverride: c.end,
           autoDownload: false,
-          fileName: `clipfactory_corte_${c.idx}`
+          fileName: `clipfactory_corte_${c.idx}_${Math.round(c.end - c.start)}s`
         });
         if (!result || !result.url || !result.blob || result.blob.size < 1024) continue;
         if (typeof window.authorizeClipDownload === "function") {
@@ -1212,7 +1247,11 @@ function exportSrt() {
     return `${hh}:${mm}:${ss},${String(ms).padStart(3, "0")}`;
   };
 
-  const srt = validCaps.map((c, idx) => `${idx + 1}\n${toSrtTime(c.start)} --> ${toSrtTime(c.end)}\n${c.text}\n`).join("\n");
+  const srt = validCaps.map((c, idx) => `${idx + 1}
+${toSrtTime(c.start)} --> ${toSrtTime(c.end)}
+${c.text}
+`).join("
+");
   const blob = new Blob([srt], { type: "text/srt;charset=utf-8" });
   const a = document.createElement("a");
   a.href = URL.createObjectURL(blob);
@@ -1531,13 +1570,14 @@ async function exportVerticalCut(opts = {}) {
   }
 
   const maxDur = resolveVideoDuration(videoEl);
-  const maxClipLen = (typeof window.HUB !== "undefined" && window.HUB.duracao) ? window.HUB.duracao : 30;
+  const clipLen = getSelectedClipDurationSec();
   const startSec = Number.isFinite(opts.startOverride)
     ? opts.startOverride
     : (state.activeClip ? state.activeClip.start : (videoEl.currentTime || 0));
-  const endSec = Number.isFinite(opts.endOverride)
+  const rawEnd = Number.isFinite(opts.endOverride)
     ? opts.endOverride
-    : (state.activeClip ? state.activeClip.end : Math.min(maxDur, startSec + maxClipLen));
+    : (startSec + clipLen);
+  const endSec = Math.min(maxDur, rawEnd);
 
   const actualDurationSec = Math.max(0.5, endSec - startSec);
 
@@ -1549,7 +1589,7 @@ async function exportVerticalCut(opts = {}) {
   if (btn) btn.disabled = true;
   state.isExporting = true;
   if ($("expResult")) $("expResult").innerHTML = "";
-  setExportLog(`Preparando exportação ${fmtInfo.ext.toUpperCase()} (${spec.w}×${spec.h} · ${spec.fps} fps)...`, 8);
+  setExportLog(`Preparando exportação ${fmtInfo.ext.toUpperCase()} (${spec.w}×${spec.h} · ${spec.fps} fps · ${Math.round(actualDurationSec)}s)...`, 8);
 
   let videoStream = null;
   let audioCtx = null;
@@ -1665,10 +1705,12 @@ async function exportVerticalCut(opts = {}) {
       let finished = false;
       let rafToken = 0;
       let rvfcId = 0;
+      let guardTimer = 0;
 
       const finish = () => {
         if (finished) return;
         finished = true;
+        if (guardTimer) clearTimeout(guardTimer);
         if (rafToken) cancelAnimationFrame(rafToken);
         if (rvfcId && typeof videoEl.cancelVideoFrameCallback === "function") {
           try { videoEl.cancelVideoFrameCallback(rvfcId); } catch (e) {}
@@ -1697,7 +1739,7 @@ async function exportVerticalCut(opts = {}) {
       }
 
       videoEl.addEventListener("ended", finish, { once: true });
-      setTimeout(finish, Math.ceil((actualDurationSec * 2 + 6) * 1000));
+      guardTimer = setTimeout(finish, Math.ceil((actualDurationSec + 8) * 1000));
     });
 
     videoEl.pause();
@@ -1718,7 +1760,7 @@ async function exportVerticalCut(opts = {}) {
     let seekableWebmBlob = await fixWebmBlobDuration(rawBlob, actualDurationSec);
     let finalBlob = seekableWebmBlob;
     const recExt = fmtInfo.ext;
-    let outName = opts.fileName || `clipfactory_corte_${spec.w}x${spec.h}_${spec.fps}fps`;
+    let outName = opts.fileName || `clipfactory_corte_${spec.w}x${spec.h}_${spec.fps}fps_${Math.round(actualDurationSec)}s`;
     outName = outName.replace(/\.[^.]+$/, "") + "." + recExt;
 
     if (fmtInfo.isAvi) {

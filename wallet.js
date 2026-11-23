@@ -1,6 +1,6 @@
 /* ============================================================
    Integração Hub WaveCombat — Supabase (assinaturas + creditos_videos + carteira_diamantes)
-   v0.015: Desconto atômico na nuvem, sem desconto em erro e persistência total
+   v0.016: Correção da coluna updated_at em assinaturas + durações exatas de 30s e 60s
    ============================================================ */
 "use strict";
 
@@ -22,6 +22,11 @@ function normalizeIsoDate(val) {
   return String(val).trim().slice(0, 10);
 }
 
+function isMissingColumnError(err, colName = "updated_at") {
+  const msg = String(err?.message || err || "").toLowerCase();
+  return msg.includes("column") && msg.includes(colName.toLowerCase());
+}
+
 function resolveInitialPlayerId() {
   const fromUrl = new URLSearchParams(window.location.search).get("id");
   if (fromUrl) return String(fromUrl);
@@ -37,6 +42,16 @@ function resolveInitialPlayerId() {
   return null;
 }
 
+function resolveInitialDurationSec() {
+  const fromUrl = Number(new URLSearchParams(window.location.search).get("dur"));
+  if (fromUrl === 60 || fromUrl === 30) return fromUrl;
+  try {
+    const saved = Number(localStorage.getItem("cf_clip_duration"));
+    if (saved === 60 || saved === 30) return saved;
+  } catch (e) {}
+  return 30;
+}
+
 const HUB = {
   playerId: resolveInitialPlayerId(),
   apiBase: new URLSearchParams(window.location.search).get("api") || "https://clipfactory-api.onrender.com",
@@ -50,9 +65,31 @@ const HUB = {
     tableAvailable: true
   },
   plano: new URLSearchParams(window.location.search).get("plano") || "pack5",
-  duracao: 30,
+  duracao: resolveInitialDurationSec(),
   deferredInstallPrompt: null,
 };
+
+function setClipDurationSec(sec) {
+  const validDur = Number(sec) === 60 ? 60 : 30;
+  HUB.duracao = validDur;
+  try { localStorage.setItem("cf_clip_duration", String(validDur)); } catch (e) {}
+  if (typeof state !== "undefined") {
+    state.clipDuration = validDur;
+    if (state.activeClip) {
+      const maxDur = (typeof resolveVideoDuration === "function")
+        ? resolveVideoDuration(document.getElementById("videoEl"))
+        : (state.duration || 60);
+      state.activeClip.end = Math.min(maxDur, state.activeClip.start + validDur);
+      if (typeof updateTimeline === "function") updateTimeline();
+    }
+  }
+  document.querySelectorAll(".durBtn").forEach(b => {
+    const active = Number(b.dataset.dur) === validDur;
+    b.classList.toggle("sel", active);
+    b.style.borderColor = active ? "var(--accent)" : "var(--border)";
+  });
+  updateHubButton();
+}
 
 function getSupabase() {
   if (!HUB.supabase && window.supabase) {
@@ -235,6 +272,34 @@ async function syncAllAccountStateFromSupabase() {
   updateHubButton();
 }
 
+async function updateAssinaturaRowSafe(sb, valuesObj) {
+  let res = await sb
+    .from("assinaturas")
+    .update({ ...valuesObj, updated_at: new Date().toISOString() })
+    .eq("id_jogador", HUB.playerId);
+
+  if (res.error && isMissingColumnError(res.error, "updated_at")) {
+    res = await sb
+      .from("assinaturas")
+      .update(valuesObj)
+      .eq("id_jogador", HUB.playerId);
+  }
+  return res;
+}
+
+async function upsertAssinaturaRowSafe(sb, valuesObj) {
+  let res = await sb
+    .from("assinaturas")
+    .upsert({ ...valuesObj, updated_at: new Date().toISOString() }, { onConflict: "id_jogador" });
+
+  if (res.error && isMissingColumnError(res.error, "updated_at")) {
+    res = await sb
+      .from("assinaturas")
+      .upsert(valuesObj, { onConflict: "id_jogador" });
+  }
+  return res;
+}
+
 async function addExtraCreditsToSupabase(qty) {
   const sb = getSupabase();
   const { data: fresh } = await sb
@@ -246,13 +311,23 @@ async function addExtraCreditsToSupabase(qty) {
   const nextRem = Number(fresh?.videos_restantes || 0) + qty;
   const nextTot = Number(fresh?.videos_comprados_total || 0) + qty;
 
-  const payload = {
+  const basePayload = {
     id_jogador: HUB.playerId,
     videos_restantes: nextRem,
-    videos_comprados_total: nextTot,
-    updated_at: new Date().toISOString()
+    videos_comprados_total: nextTot
   };
-  const { error } = await sb.from("creditos_videos").upsert(payload, { onConflict: "id_jogador" });
+
+  let { error } = await sb
+    .from("creditos_videos")
+    .upsert({ ...basePayload, updated_at: new Date().toISOString() }, { onConflict: "id_jogador" });
+
+  if (error && isMissingColumnError(error, "updated_at")) {
+    const retry = await sb
+      .from("creditos_videos")
+      .upsert(basePayload, { onConflict: "id_jogador" });
+    error = retry.error;
+  }
+
   if (error) throw new Error("Erro ao salvar vídeos na nuvem: " + error.message);
 
   HUB.extraCredits.videos_restantes = nextRem;
@@ -303,14 +378,10 @@ async function consumeOneVideoFromCloud() {
   const todayStr = todayIsoDate();
   if (freshSub.ativa && freshSub.clipes_hoje < freshSub.limite_diario) {
     const nextUsed = freshSub.clipes_hoje + 1;
-    const { error: upSubErr } = await sb
-      .from("assinaturas")
-      .update({
-        clipes_hoje: nextUsed,
-        dia_uso: todayStr,
-        updated_at: new Date().toISOString()
-      })
-      .eq("id_jogador", HUB.playerId);
+    const { error: upSubErr } = await updateAssinaturaRowSafe(sb, {
+      clipes_hoje: nextUsed,
+      dia_uso: todayStr
+    });
     if (upSubErr) throw new Error("Falha ao registrar uso na nuvem: " + upSubErr.message);
     return { ok: true, origem: "assinatura" };
   }
@@ -327,10 +398,7 @@ async function consumeOneVideoFromCloud() {
     const nextRem = curRem - 1;
     const { error: upCredErr } = await sb
       .from("creditos_videos")
-      .update({
-        videos_restantes: nextRem,
-        updated_at: new Date().toISOString()
-      })
+      .update({ videos_restantes: nextRem })
       .eq("id_jogador", HUB.playerId)
       .eq("videos_restantes", curRem);
     if (upCredErr) throw new Error("Falha ao descontar vídeo na nuvem: " + upCredErr.message);
@@ -358,9 +426,7 @@ window.refundOneVideoToCloud = async function(origem) {
     if (origem === "assinatura") {
       const s = await fetchSubscriptionFromSupabase();
       if (s.clipes_hoje > 0) {
-        await sb.from("assinaturas")
-          .update({ clipes_hoje: s.clipes_hoje - 1, updated_at: new Date().toISOString() })
-          .eq("id_jogador", HUB.playerId);
+        await updateAssinaturaRowSafe(sb, { clipes_hoje: s.clipes_hoje - 1 });
       }
     } else if (origem === "avulso") {
       const { data } = await sb.from("creditos_videos")
@@ -368,7 +434,7 @@ window.refundOneVideoToCloud = async function(origem) {
         .eq("id_jogador", HUB.playerId)
         .maybeSingle();
       await sb.from("creditos_videos")
-        .update({ videos_restantes: Number(data?.videos_restantes || 0) + 1, updated_at: new Date().toISOString() })
+        .update({ videos_restantes: Number(data?.videos_restantes || 0) + 1 })
         .eq("id_jogador", HUB.playerId);
     }
     await syncAllAccountStateFromSupabase();
@@ -498,7 +564,7 @@ async function debitDiamonds(cost, reasonLabel) {
   const nextBalance = current - cost;
   const { error: upErr } = await sb
     .from("carteira_diamantes")
-    .update({ diamantes: nextBalance, updated_at: new Date().toISOString() })
+    .update({ diamantes: nextBalance })
     .eq("id_jogador", HUB.playerId);
   if (upErr) throw new Error(upErr.message);
 
@@ -520,7 +586,7 @@ async function refundDiamonds(amount, reasonLabel) {
     const restored = current + amount;
     await sb
       .from("carteira_diamantes")
-      .update({ diamantes: restored, updated_at: new Date().toISOString() })
+      .update({ diamantes: restored })
       .eq("id_jogador", HUB.playerId);
     HUB.diamantes = restored;
     renderWalletBar(`💎 +${amount} devolvidos (${reasonLabel})`, "ok");
@@ -550,13 +616,10 @@ async function subscribeWeekly() {
       fim: newFim.toISOString(),
       limite_diario: 20,
       clipes_hoje: normalizeIsoDate(freshSub?.dia_uso) === todayStr ? (freshSub?.clipes_hoje || 0) : 0,
-      dia_uso: todayStr,
-      updated_at: now.toISOString()
+      dia_uso: todayStr
     };
 
-    const { error: upErr } = await sb
-      .from("assinaturas")
-      .upsert(payload, { onConflict: "id_jogador" });
+    const { error: upErr } = await upsertAssinaturaRowSafe(sb, payload);
 
     if (upErr) {
       await refundDiamonds(cost, "Erro ao salvar assinatura");
@@ -612,12 +675,9 @@ function injectHubCard() {
   });
   card.querySelector(`.planCard[data-plan="${HUB.plano}"]`).style.borderColor = "var(--accent)";
   card.querySelectorAll(".durBtn").forEach(b => b.onclick = () => {
-    HUB.duracao = +b.dataset.dur;
-    card.querySelectorAll(".durBtn").forEach(x => x.style.borderColor = "var(--border)");
-    b.style.borderColor = "var(--accent)";
-    updateHubButton();
+    setClipDurationSec(Number(b.dataset.dur));
   });
-  card.querySelector(`.durBtn[data-dur="${HUB.duracao}"]`).style.borderColor = "var(--accent)";
+  setClipDurationSec(HUB.duracao);
   document.getElementById("hubStartBtn").onclick = startHubJob;
   document.getElementById("hubBuySelectedBtn").onclick = () => {
     if (HUB.plano === "weekly") subscribeWeekly();
@@ -653,7 +713,7 @@ async function startHubJob() {
     if (typeof analyzeMoments === "function") {
       await analyzeMoments();
     }
-    info.innerHTML = `▸ Clipes prontos! Use <b>Visualizar</b> ou <b>Baixar</b> (desconta 1 vídeo somente após exportar sem erro).`;
+    info.innerHTML = `▸ Clipes prontos (${HUB.duracao}s)! Use <b>Visualizar</b> ou <b>Baixar</b> (desconta 1 vídeo somente após exportar sem erro).`;
     btn.disabled = false;
     updateHubButton();
   } catch (e) {

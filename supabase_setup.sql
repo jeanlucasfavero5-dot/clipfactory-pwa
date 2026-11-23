@@ -1,5 +1,5 @@
 -- ============================================================
--- ClipFactory / WaveCombat Hub — Tabelas, RLS e RPC Atômica (v0.015)
+-- ClipFactory / WaveCombat Hub — Tabelas, RLS e RPC Atômica (v0.016)
 -- Execute este script no SQL Editor do Supabase
 -- ============================================================
 
@@ -13,12 +13,18 @@ create table if not exists public.assinaturas (
   updated_at timestamptz not null default now()
 );
 
+alter table public.assinaturas
+  add column if not exists updated_at timestamptz not null default now();
+
 create table if not exists public.creditos_videos (
   id_jogador text primary key,
   videos_restantes integer not null default 0,
   videos_comprados_total integer not null default 0,
   updated_at timestamptz not null default now()
 );
+
+alter table public.creditos_videos
+  add column if not exists updated_at timestamptz not null default now();
 
 alter table public.assinaturas enable row level security;
 alter table public.creditos_videos enable row level security;
@@ -75,8 +81,7 @@ begin
       v_usados := v_usados + 1;
       update public.assinaturas
       set clipes_hoje = v_usados,
-          dia_uso = v_hoje,
-          updated_at = now()
+          dia_uso = v_hoje
       where id_jogador = p_id_jogador;
 
       return jsonb_build_object(
@@ -97,8 +102,7 @@ begin
   if found and v_avulso > 0 then
     v_avulso := v_avulso - 1;
     update public.creditos_videos
-    set videos_restantes = v_avulso,
-        updated_at = now()
+    set videos_restantes = v_avulso
     where id_jogador = p_id_jogador;
 
     return jsonb_build_object(
@@ -123,14 +127,12 @@ declare
 begin
   if p_origem = 'assinatura' then
     update public.assinaturas
-    set clipes_hoje = greatest(0, coalesce(clipes_hoje, 0) - 1),
-        updated_at = now()
+    set clipes_hoje = greatest(0, coalesce(clipes_hoje, 0) - 1)
     where id_jogador = p_id_jogador
       and dia_uso = v_hoje;
   elsif p_origem = 'avulso' then
     update public.creditos_videos
-    set videos_restantes = coalesce(videos_restantes, 0) + 1,
-        updated_at = now()
+    set videos_restantes = coalesce(videos_restantes, 0) + 1
     where id_jogador = p_id_jogador;
   end if;
 end;
@@ -138,3 +140,5 @@ $$;
 
 grant execute on function public.consumir_video_download(text) to anon, authenticated;
 grant execute on function public.estornar_video_download(text, text) to anon, authenticated;
+
+notify pgrst, 'reload schema';

@@ -1,6 +1,6 @@
 /* ============================================================
    Integração Hub WaveCombat — Supabase (assinaturas + creditos_videos + carteira_diamantes)
-   v0.012: Desconto garantido no download real + persistência robusta de créditos
+   v0.015: Desconto atômico na nuvem, sem desconto em erro e persistência total
    ============================================================ */
 "use strict";
 
@@ -71,15 +71,12 @@ function getAvailableVideosSummary() {
   const extraRemaining = Math.max(0, Number(HUB.extraCredits?.videos_restantes || 0));
   const extraTotal = Math.max(0, Number(HUB.extraCredits?.videos_comprados_total || 0));
 
-  const totalAvailable = dailyRemaining + extraRemaining;
-  const parts = [];
-  if (hasWeekly) {
-    parts.push(`${dailyRemaining}/${dailyLimit} hoje`);
-  }
-  if (extraRemaining > 0 || extraTotal > 0 || !hasWeekly) {
-    const denom = extraTotal > 0 ? extraTotal : Math.max(extraRemaining, 10);
-    parts.push(`${extraRemaining}/${denom} avulso`);
-  }
+  const totalRemaining = dailyRemaining + extraRemaining;
+  const totalCapacity = (hasWeekly ? dailyLimit : 0) + Math.max(extraRemaining, extraTotal);
+
+  const label = totalCapacity > 0
+    ? `${totalRemaining}/${totalCapacity}`
+    : `0/0`;
 
   return {
     hasWeekly,
@@ -88,8 +85,9 @@ function getAvailableVideosSummary() {
     dailyRemaining,
     extraRemaining,
     extraTotal,
-    totalAvailable,
-    label: parts.join(" + ")
+    totalAvailable: totalRemaining,
+    totalCapacity,
+    label
   };
 }
 
@@ -104,16 +102,17 @@ function setupPwaInstall() {
   });
 
   btn.addEventListener("click", async () => {
-    if (!HUB.deferredInstallPrompt) return;
-    HUB.deferredInstallPrompt.prompt();
-    await HUB.deferredInstallPrompt.userChoice.catch(() => null);
-    HUB.deferredInstallPrompt = null;
-    btn.classList.add("hidden");
+    if (HUB.deferredInstallPrompt) {
+      HUB.deferredInstallPrompt.prompt();
+      await HUB.deferredInstallPrompt.userChoice.catch(() => null);
+      HUB.deferredInstallPrompt = null;
+    } else {
+      alert("Para instalar no celular: toque no menu do navegador (⋮) e escolha 'Instalar aplicativo' ou 'Adicionar à tela inicial'.");
+    }
   });
 
   window.addEventListener("appinstalled", () => {
     HUB.deferredInstallPrompt = null;
-    btn.classList.add("hidden");
     renderWalletBar("📲 ClipFactory instalado no dispositivo!", "ok");
   });
 }
@@ -129,7 +128,7 @@ function renderWalletBar(msg, kind) {
   if (!bar) return;
 
   if (!HUB.playerId) {
-    bar.innerHTML = `<span style="color:var(--muted)">🔓 Modo local — sem jogador do Hub (?id= na URL ou sessão).</span>`;
+    bar.innerHTML = `<span style="color:var(--muted)">🔓 Modo local — entre com sua conta do Hub para sincronizar diamantes e vídeos disponíveis.</span>`;
     return;
   }
 
@@ -139,18 +138,17 @@ function renderWalletBar(msg, kind) {
     <span>👤 <b>${HUB.nick ?? "carregando…"}</b> <span style="color:var(--muted)">(ID ${HUB.playerId})</span></span>
     <span style="margin-left:auto;display:flex;align-items:center;gap:10px;flex-wrap:wrap">
       <span>${saldo} diamantes</span>
-      <span>🎬 <b id="walletVideosCount" style="color:#4ade80">${vids.label}</b> disponíveis p/ baixar</span>
-      <button type="button" class="ghost small" id="walletRefresh">↻</button>
+      <span>🎬 <b id="walletVideosCount" style="color:#4ade80">${vids.label}</b> vídeos disponíveis</span>
+      <a href="https://wavecombat-hub.onrender.com/#inicio" target="_blank" rel="noopener" class="ghost small" style="text-decoration:none;padding:4px 9px;border-radius:8px;border:1px solid var(--border);color:#ffd166;font-weight:800">+ Diamantes</a>
+      <button type="button" class="ghost small" id="walletRefresh" title="Sincronizar com Supabase">↻</button>
     </span>
     ${msg ? `<div style="width:100%;margin-top:4px;color:${kind === "err" ? "var(--bad)" : "var(--good)"}">${msg}</div>` : ""}`;
 
   const refBtn = document.getElementById("walletRefresh");
   if (refBtn) {
     refBtn.onclick = async () => {
-      await loadWallet();
-      await loadExtraCredits();
-      await refreshPremiumPanel();
-      updateHubButton();
+      await syncAllAccountStateFromSupabase();
+      renderWalletBar("🔄 Saldo sincronizado com a nuvem.", "ok");
     };
   }
 }
@@ -186,11 +184,6 @@ async function loadExtraCredits() {
 
     if (error) {
       HUB.extraCredits.tableAvailable = false;
-      try {
-        const local = Number(localStorage.getItem("cf_extra_videos_restantes") || 0);
-        HUB.extraCredits.videos_restantes = Math.max(0, local);
-        renderWalletBar();
-      } catch (e) {}
       return;
     }
     HUB.extraCredits.tableAvailable = true;
@@ -201,128 +194,6 @@ async function loadExtraCredits() {
     HUB.extraCredits.tableAvailable = false;
   }
 }
-
-async function addExtraCreditsToSupabase(qty) {
-  HUB.extraCredits.videos_restantes = Number(HUB.extraCredits.videos_restantes || 0) + qty;
-  HUB.extraCredits.videos_comprados_total = Number(HUB.extraCredits.videos_comprados_total || 0) + qty;
-  renderWalletBar();
-
-  if (!HUB.extraCredits.tableAvailable) return;
-  try {
-    const sb = getSupabase();
-    const payload = {
-      id_jogador: HUB.playerId,
-      videos_restantes: HUB.extraCredits.videos_restantes,
-      videos_comprados_total: HUB.extraCredits.videos_comprados_total,
-      updated_at: new Date().toISOString()
-    };
-    const { error } = await sb.from("creditos_videos").upsert(payload, { onConflict: "id_jogador" });
-    if (error) console.warn("creditos_videos upsert:", error.message);
-  } catch (e) {
-    console.warn("creditos_videos:", e);
-  }
-}
-
-async function consumeOneVideoCreditForDownload() {
-  const todayStr = todayIsoDate();
-  const hasWeekly = !!(HUB.sub && HUB.sub.ativa);
-  const dailyLimit = Number(HUB.sub?.limite_diario || 20);
-  let usedToday = normalizeIsoDate(HUB.sub?.dia_uso) === todayStr ? Number(HUB.sub?.clipes_hoje || 0) : 0;
-
-  if (hasWeekly && usedToday < dailyLimit) {
-    usedToday += 1;
-    HUB.sub.clipes_hoje = usedToday;
-    HUB.sub.dia_uso = todayStr;
-    HUB.sub.limite_diario = dailyLimit;
-
-    const sb = getSupabase();
-    const { error } = await sb
-      .from("assinaturas")
-      .update({
-        clipes_hoje: usedToday,
-        dia_uso: todayStr,
-        updated_at: new Date().toISOString()
-      })
-      .eq("id_jogador", HUB.playerId);
-
-    if (error) {
-      console.warn("Erro ao atualizar cota diária:", error.message);
-    }
-
-    const remToday = Math.max(0, dailyLimit - usedToday);
-    renderWalletBar(`🎬 1 vídeo descontado da cota diária (${remToday}/${dailyLimit} restantes hoje)`, "ok");
-    return true;
-  }
-
-  if (Number(HUB.extraCredits.videos_restantes || 0) > 0) {
-    const nextRem = Math.max(0, Number(HUB.extraCredits.videos_restantes) - 1);
-    HUB.extraCredits.videos_restantes = nextRem;
-
-    let persisted = false;
-    if (HUB.extraCredits.tableAvailable) {
-      try {
-        const sb = getSupabase();
-        // Reescreve a partir do valor atual no banco para não sobrescrever
-        // crédito comprado em outro dispositivo com valor antigo em cache.
-        const { data: fresh } = await sb
-          .from("creditos_videos")
-          .select("videos_restantes")
-          .eq("id_jogador", HUB.playerId)
-          .maybeSingle();
-        const dbRem = Number(fresh?.videos_restantes ?? HUB.extraCredits.videos_restantes);
-        const targetRem = Math.max(0, dbRem - 1);
-        const { error } = await sb
-          .from("creditos_videos")
-          .update({ videos_restantes: targetRem, updated_at: new Date().toISOString() })
-          .eq("id_jogador", HUB.playerId)
-          .gt("videos_restantes", 0);
-        persisted = !error;
-        if (persisted) HUB.extraCredits.videos_restantes = targetRem;
-        else console.warn("creditos_videos update:", error?.message);
-      } catch (e) {
-        console.warn("creditos_videos:", e);
-      }
-    }
-
-    if (!persisted) {
-      try { localStorage.setItem("cf_extra_videos_restantes", String(nextRem)); } catch (e) {}
-    }
-    renderWalletBar(`🎬 1 vídeo avulso descontado (${nextRem}/${Math.max(nextRem, HUB.extraCredits.videos_comprados_total)} restantes)`, "ok");
-    return true;
-  }
-
-  return false;
-}
-
-window.authorizeClipDownload = async function(clip, count = 1) {
-  if (!HUB.playerId) return true;
-  try {
-    const freshSub = await fetchSubscriptionFromSupabase();
-    const todayStr = todayIsoDate();
-    if (HUB.sub && HUB.sub.ativa && freshSub.ativa && normalizeIsoDate(HUB.sub.dia_uso) === todayStr) {
-      HUB.sub.clipes_hoje = Math.max(Number(HUB.sub.clipes_hoje || 0), Number(freshSub.clipes_hoje || 0));
-      HUB.sub.dia_uso = todayStr;
-    } else {
-      HUB.sub = freshSub;
-    }
-    await loadExtraCredits();
-
-    let remainingNeeded = Math.max(1, Number(count) || 1);
-    while (remainingNeeded > 0) {
-      const usedQuotaOrCredit = await consumeOneVideoCreditForDownload();
-      if (!usedQuotaOrCredit) {
-        const unitCost = 20;
-        await debitDiamonds(unitCost, `Download de clipe #${clip?.idx || ""}`);
-      }
-      remainingNeeded--;
-    }
-    await refreshPremiumPanel();
-    return true;
-  } catch (err) {
-    alert("❌ " + err.message);
-    return false;
-  }
-};
 
 async function fetchSubscriptionFromSupabase() {
   const sb = getSupabase();
@@ -355,13 +226,184 @@ async function fetchSubscriptionFromSupabase() {
   };
 }
 
+async function syncAllAccountStateFromSupabase() {
+  if (!HUB.playerId) return;
+  await loadWallet();
+  HUB.sub = await fetchSubscriptionFromSupabase();
+  await loadExtraCredits();
+  await refreshPremiumPanel();
+  updateHubButton();
+}
+
+async function addExtraCreditsToSupabase(qty) {
+  const sb = getSupabase();
+  const { data: fresh } = await sb
+    .from("creditos_videos")
+    .select("videos_restantes, videos_comprados_total")
+    .eq("id_jogador", HUB.playerId)
+    .maybeSingle();
+
+  const nextRem = Number(fresh?.videos_restantes || 0) + qty;
+  const nextTot = Number(fresh?.videos_comprados_total || 0) + qty;
+
+  const payload = {
+    id_jogador: HUB.playerId,
+    videos_restantes: nextRem,
+    videos_comprados_total: nextTot,
+    updated_at: new Date().toISOString()
+  };
+  const { error } = await sb.from("creditos_videos").upsert(payload, { onConflict: "id_jogador" });
+  if (error) throw new Error("Erro ao salvar vídeos na nuvem: " + error.message);
+
+  HUB.extraCredits.videos_restantes = nextRem;
+  HUB.extraCredits.videos_comprados_total = nextTot;
+  renderWalletBar();
+}
+
+/* ============================================================
+   1) Checagem prévia (ANTES de renderizar) — NÃO desconta nada
+   ============================================================ */
+window.checkCanDownloadVideos = async function(neededCount = 1) {
+  if (!HUB.playerId) return true;
+  await syncAllAccountStateFromSupabase();
+  const vids = getAvailableVideosSummary();
+  if (vids.totalAvailable >= neededCount) {
+    return true;
+  }
+  alert(
+    `Você possui ${vids.label} vídeos disponíveis para download (necessário: ${neededCount}).\n\n` +
+    `Adquira a Assinatura 7 dias (20 vídeos/dia) ou um pacote adicional (+5 ou +10 vídeos) usando seus diamantes.`
+  );
+  return false;
+};
+
+/* ============================================================
+   2) Consumo atômico (SOMENTE após o vídeo válido estar pronto)
+   ============================================================ */
+async function consumeOneVideoFromCloud() {
+  const sb = getSupabase();
+
+  try {
+    const { data: rpcData, error: rpcErr } = await sb.rpc("consumir_video_download", {
+      p_id_jogador: HUB.playerId
+    });
+    if (!rpcErr && rpcData) {
+      if (rpcData.ok) {
+        return { ok: true, origem: rpcData.origem };
+      }
+      if (rpcData.motivo === "sem_saldo_videos") {
+        throw new Error("Sem vídeos disponíveis para baixar. Compre um pacote adicional ou ative a assinatura semanal.");
+      }
+    }
+  } catch (e) {
+    if (e.message && e.message.includes("Sem vídeos disponíveis")) throw e;
+  }
+
+  const freshSub = await fetchSubscriptionFromSupabase();
+  const todayStr = todayIsoDate();
+  if (freshSub.ativa && freshSub.clipes_hoje < freshSub.limite_diario) {
+    const nextUsed = freshSub.clipes_hoje + 1;
+    const { error: upSubErr } = await sb
+      .from("assinaturas")
+      .update({
+        clipes_hoje: nextUsed,
+        dia_uso: todayStr,
+        updated_at: new Date().toISOString()
+      })
+      .eq("id_jogador", HUB.playerId);
+    if (upSubErr) throw new Error("Falha ao registrar uso na nuvem: " + upSubErr.message);
+    return { ok: true, origem: "assinatura" };
+  }
+
+  const { data: freshCred, error: readCredErr } = await sb
+    .from("creditos_videos")
+    .select("videos_restantes")
+    .eq("id_jogador", HUB.playerId)
+    .maybeSingle();
+  if (readCredErr) throw new Error("Falha ao consultar saldo de vídeos: " + readCredErr.message);
+
+  const curRem = Number(freshCred?.videos_restantes || 0);
+  if (curRem > 0) {
+    const nextRem = curRem - 1;
+    const { error: upCredErr } = await sb
+      .from("creditos_videos")
+      .update({
+        videos_restantes: nextRem,
+        updated_at: new Date().toISOString()
+      })
+      .eq("id_jogador", HUB.playerId)
+      .eq("videos_restantes", curRem);
+    if (upCredErr) throw new Error("Falha ao descontar vídeo na nuvem: " + upCredErr.message);
+    return { ok: true, origem: "avulso" };
+  }
+
+  throw new Error("Sem vídeos disponíveis para baixar. Adquira um pacote adicional ou assine o plano semanal.");
+}
+
+window.refundOneVideoToCloud = async function(origem) {
+  if (!HUB.playerId || !origem) return;
+  const sb = getSupabase();
+  try {
+    const { error } = await sb.rpc("estornar_video_download", {
+      p_id_jogador: HUB.playerId,
+      p_origem: origem
+    });
+    if (!error) {
+      await syncAllAccountStateFromSupabase();
+      return;
+    }
+  } catch (e) {}
+
+  try {
+    if (origem === "assinatura") {
+      const s = await fetchSubscriptionFromSupabase();
+      if (s.clipes_hoje > 0) {
+        await sb.from("assinaturas")
+          .update({ clipes_hoje: s.clipes_hoje - 1, updated_at: new Date().toISOString() })
+          .eq("id_jogador", HUB.playerId);
+      }
+    } else if (origem === "avulso") {
+      const { data } = await sb.from("creditos_videos")
+        .select("videos_restantes")
+        .eq("id_jogador", HUB.playerId)
+        .maybeSingle();
+      await sb.from("creditos_videos")
+        .update({ videos_restantes: Number(data?.videos_restantes || 0) + 1, updated_at: new Date().toISOString() })
+        .eq("id_jogador", HUB.playerId);
+    }
+    await syncAllAccountStateFromSupabase();
+  } catch (e) {}
+};
+
+window.authorizeClipDownload = async function(clip, count = 1) {
+  if (!HUB.playerId) return { ok: true, consumedOrigins: [] };
+  const consumedOrigins = [];
+  try {
+    const needed = Math.max(1, Number(count) || 1);
+    for (let i = 0; i < needed; i++) {
+      const res = await consumeOneVideoFromCloud();
+      consumedOrigins.push(res.origem);
+    }
+    await syncAllAccountStateFromSupabase();
+    const vids = getAvailableVideosSummary();
+    renderWalletBar(`🎬 ${needed} vídeo(s) descontado(s). Saldo atual: ${vids.label} disponíveis.`, "ok");
+    return { ok: true, consumedOrigins };
+  } catch (err) {
+    for (const orig of consumedOrigins) {
+      await window.refundOneVideoToCloud(orig);
+    }
+    alert("❌ " + err.message);
+    return { ok: false, consumedOrigins: [] };
+  }
+};
+
 async function injectPremiumPanel(col) {
   if (!HUB.playerId || document.getElementById("premiumPanel")) return;
   const card = document.createElement("div");
   card.className = "card";
   card.id = "premiumPanel";
   card.innerHTML = `
-    <div class="card-h"><h2>⭐ Assinatura semanal & cota diária</h2><button type="button" class="collapse-btn">▾</button></div>
+    <div class="card-h"><h2>⭐ Assinatura semanal & vídeos disponíveis</h2><button type="button" class="collapse-btn">▾</button></div>
     <div class="card-body"><div id="premiumBody" class="signal">carregando…</div></div>`;
   col.prepend(card);
   if (typeof initCollapsibleCards === "function") initCollapsibleCards();
@@ -373,20 +415,17 @@ async function refreshPremiumPanel() {
   if (!body || !HUB.playerId) return;
   try {
     const s = await fetchSubscriptionFromSupabase();
-    if (HUB.sub && normalizeIsoDate(HUB.sub.dia_uso) === todayIsoDate()) {
-      s.clipes_hoje = Math.max(Number(s.clipes_hoje || 0), Number(HUB.sub.clipes_hoje || 0));
-    }
     HUB.sub = s;
     const vids = getAvailableVideosSummary();
 
     if (!s.ativa) {
       body.innerHTML = `
         <div class="stat">
-          <div><b>${vids.extraRemaining}/${Math.max(vids.extraRemaining, vids.extraTotal || 0)}</b>avulsos p/ baixar</div>
+          <div><b>${vids.label}</b>vídeos disponíveis</div>
           <div><b>${HUB.diamantes ?? 0}</b>💎 saldo</div>
           <div><b>7 dias</b>inativo</div>
         </div>
-        <p class="signal">O desconto acontece <b>somente no download</b>. Assinatura dura <b>7 dias</b> com cota diária de <b>20 vídeos/dia</b> (ou compre pacotes avulsos).</p>
+        <p class="signal">O desconto acontece <b>somente quando o download é concluído sem erros</b>. Assine 7 dias (20 vídeos/dia) ou compre pacotes adicionais.</p>
         <div class="row" style="gap:8px;margin-top:8px">
           <button type="button" class="ghost small" id="buyPack5Btn" style="flex:1">+5 vídeos (💎 100)</button>
           <button type="button" class="ghost small" id="buyPack10Btn" style="flex:1">+10 vídeos (💎 200)</button>
@@ -404,11 +443,11 @@ async function refreshPremiumPanel() {
     body.innerHTML = `
       <span class="badgePremium">⭐ ASSINATURA 7 DIAS ATIVA</span>
       <div class="stat">
-        <div><b>${vids.dailyRemaining}/${vids.dailyLimit}</b>hoje (20/dia)</div>
-        <div><b>${vids.extraRemaining}/${Math.max(vids.extraRemaining, vids.extraTotal)}</b>avulso extra</div>
-        <div><b>${dias}</b>dias restantes</div>
+        <div><b>${vids.label}</b>total disponível</div>
+        <div><b>${vids.dailyRemaining}/${vids.dailyLimit}</b>cota hoje</div>
+        <div><b>${vids.extraRemaining}</b>avulso extra</div>
       </div>
-      <p class="signal">Assinatura válida por 7 dias até <b>${fim.toLocaleDateString("pt-BR")} ${fim.toLocaleTimeString("pt-BR", { hour: "2-digit", minute: "2-digit" })}</b> — cota de <b>20 vídeos por dia</b> (renovada diariamente).</p>
+      <p class="signal">Válida por <b>${dias} dia(s)</b> até <b>${fim.toLocaleDateString("pt-BR")} ${fim.toLocaleTimeString("pt-BR", { hour: "2-digit", minute: "2-digit" })}</b>. Se ocorrer erro na exportação, nenhum vídeo é descontado.</p>
       <div class="row" style="gap:8px;margin-top:6px">
         <button type="button" class="ghost small" id="buyPack5Btn" style="flex:1">+5 vídeos (💎 100)</button>
         <button type="button" class="ghost small" id="buyPack10Btn" style="flex:1">+10 vídeos (💎 200)</button>
@@ -425,13 +464,18 @@ async function refreshPremiumPanel() {
 
 async function buyExtraPack(packKey) {
   const pack = PLANOS[packKey] || PLANOS.pack10;
-  if (!confirm(`Comprar ${pack.label} (+${pack.n} vídeos para download) por 💎 ${pack.custo}?`)) return;
+  if (!confirm(`Comprar ${pack.label} (+${pack.n} vídeos disponíveis) por 💎 ${pack.custo}?`)) return;
   try {
     await debitDiamonds(pack.custo, pack.label);
-    await addExtraCreditsToSupabase(pack.n);
-    renderWalletBar(`✅ +${pack.n} vídeos adicionados para download!`, "ok");
-    await refreshPremiumPanel();
-    updateHubButton();
+    try {
+      await addExtraCreditsToSupabase(pack.n);
+    } catch (saveErr) {
+      await refundDiamonds(pack.custo, "Estorno por falha ao salvar pacote");
+      throw saveErr;
+    }
+    await syncAllAccountStateFromSupabase();
+    const vids = getAvailableVideosSummary();
+    renderWalletBar(`✅ +${pack.n} vídeos adicionados! Saldo atual: ${vids.label} disponíveis.`, "ok");
   } catch (e) {
     renderWalletBar("❌ " + e.message, "err");
   }
@@ -448,7 +492,7 @@ async function debitDiamonds(cost, reasonLabel) {
 
   const current = Number(wData?.diamantes ?? 0);
   if (current < cost) {
-    throw new Error(`Saldo insuficiente (${current} 💎). Necessário: ${cost} 💎 (${reasonLabel}).`);
+    throw new Error(`Saldo insuficiente (${current} 💎). Compre diamantes no Hub (${reasonLabel}: ${cost} 💎).`);
   }
 
   const nextBalance = current - cost;
@@ -492,9 +536,10 @@ async function subscribeWeekly() {
     await debitDiamonds(cost, "Assinatura 7 dias");
 
     const sb = getSupabase();
+    const freshSub = await fetchSubscriptionFromSupabase();
     const now = new Date();
-    const baseMs = (HUB.sub && HUB.sub.ativa && new Date(HUB.sub.fim).getTime() > now.getTime())
-      ? new Date(HUB.sub.fim).getTime()
+    const baseMs = (freshSub && freshSub.ativa && new Date(freshSub.fim).getTime() > now.getTime())
+      ? new Date(freshSub.fim).getTime()
       : now.getTime();
     const newFim = new Date(baseMs + 7 * 86400000);
     const todayStr = todayIsoDate();
@@ -504,30 +549,23 @@ async function subscribeWeekly() {
       inicio: now.toISOString(),
       fim: newFim.toISOString(),
       limite_diario: 20,
-      clipes_hoje: normalizeIsoDate(HUB.sub?.dia_uso) === todayStr ? (HUB.sub?.clipes_hoje || 0) : 0,
+      clipes_hoje: normalizeIsoDate(freshSub?.dia_uso) === todayStr ? (freshSub?.clipes_hoje || 0) : 0,
       dia_uso: todayStr,
       updated_at: now.toISOString()
     };
 
-    const { data: existing } = await sb
+    const { error: upErr } = await sb
       .from("assinaturas")
-      .select("id_jogador")
-      .eq("id_jogador", HUB.playerId)
-      .maybeSingle();
+      .upsert(payload, { onConflict: "id_jogador" });
 
-    const res = existing
-      ? await sb.from("assinaturas").update(payload).eq("id_jogador", HUB.playerId)
-      : await sb.from("assinaturas").upsert(payload, { onConflict: "id_jogador" });
-
-    if (res.error) {
+    if (upErr) {
       await refundDiamonds(cost, "Erro ao salvar assinatura");
-      throw new Error(res.error.message);
+      throw new Error(upErr.message);
     }
 
-    renderWalletBar("⭐ Assinatura 7 dias ativa (20 vídeos/dia)!", "ok");
-    await refreshPremiumPanel();
-    await loadWallet();
-    updateHubButton();
+    await syncAllAccountStateFromSupabase();
+    const vids = getAvailableVideosSummary();
+    renderWalletBar(`⭐ Assinatura 7 dias ativa! Saldo atual: ${vids.label} vídeos disponíveis.`, "ok");
   } catch (e) {
     renderWalletBar("❌ " + e.message, "err");
   }
@@ -558,11 +596,10 @@ function injectHubCard() {
         <button type="button" class="ghost small durBtn" data-dur="60" style="flex:1">⏱ 60 segundos</button>
       </div>
       <div class="row" style="margin-top:10px;gap:8px">
-        <button type="button" id="hubStartBtn" style="flex:1">🎬 Gerar cortes (cobrança só no download)</button>
+        <button type="button" id="hubStartBtn" style="flex:1">🎬 Gerar cortes (sem desconto ao gerar)</button>
         <button type="button" class="ghost small" id="hubBuySelectedBtn" style="flex:0 0 auto">💎 Comprar pacote</button>
       </div>
       <div id="hubJobInfo" class="signal" style="margin-top:8px"></div>
-      <div id="hubClips" style="margin-top:8px"></div>
     </div>`;
   col.insertBefore(card, col.children[1] || null);
   if (typeof initCollapsibleCards === "function") initCollapsibleCards();
@@ -603,23 +640,20 @@ function updateHubButton() {
   if (!hasSource) {
     btn.textContent = "🎬 Envie um vídeo primeiro";
   } else {
-    btn.textContent = `🎬 Gerar cortes de ${HUB.duracao}s (grátis p/ gerar · cobra só ao baixar)`;
+    btn.textContent = `🎬 Gerar cortes de ${HUB.duracao}s (cobra só ao baixar sem erro)`;
   }
 }
 
 async function startHubJob() {
   const info = document.getElementById("hubJobInfo");
   const btn = document.getElementById("hubStartBtn");
-
   try {
     btn.disabled = true;
-    info.innerHTML = `▸ Gerando sugestões de clipes de ${HUB.duracao}s na janela ${fmt(state.segStart)} → ${fmt(state.segEnd)} (nenhum desconto ao gerar)…`;
-
+    info.innerHTML = `▸ Gerando sugestões de clipes de ${HUB.duracao}s na janela ${fmt(state.segStart)} → ${fmt(state.segEnd)}…`;
     if (typeof analyzeMoments === "function") {
       await analyzeMoments();
     }
-
-    info.innerHTML = `▸ Clipes prontos! Use <b>Visualizar</b> para ver o preview vertical 9:16 e <b>Baixar</b> para exportar.`;
+    info.innerHTML = `▸ Clipes prontos! Use <b>Visualizar</b> ou <b>Baixar</b> (desconta 1 vídeo somente após exportar sem erro).`;
     btn.disabled = false;
     updateHubButton();
   } catch (e) {
@@ -633,9 +667,7 @@ window.addEventListener("DOMContentLoaded", async () => {
   setupPwaInstall();
   renderWalletBar();
   if (!HUB.playerId) return;
-  await loadWallet();
-  await loadExtraCredits();
-  await refreshPremiumPanel();
+  await syncAllAccountStateFromSupabase();
   const obs = new MutationObserver(() => {
     const ed = document.getElementById("editor");
     if (ed && !ed.classList.contains("hidden")) injectHubCard();

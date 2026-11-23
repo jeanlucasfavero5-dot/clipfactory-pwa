@@ -1,15 +1,16 @@
-# ClipFactory PWA (v0.002)
-
-Pacote completo unificado na paleta escura/verde neon (`#030705`, `#07140e`, `#22c55e`) com as funções do editor de cortes verticais 9:16 e integração com o Hub WaveCombat e Supabase.
+# ClipFactory PWA × Hub WaveCombat (v0.015)
 
 ## Arquivos incluídos neste pacote
-- `login.html` — Tela de login com Supabase Auth / `usuarios` + leitura de `carteira_diamantes`, instalação PWA e verificação de versão.
-- `editor.html` — Editor completo com upload/arraste de vídeo, enquadramento de câmera e jogo, timeline com janela de análise, análise heurística de melhores momentos, prévia 9:16 em canvas, presets de legenda e gancho, legendas manuais/Whisper/.SRT, exportação e integração com a carteira/planos.
-- `app.js` — Lógica completa do editor, análise, prévia em canvas e exportação.
-- `presets.js` — Presets de estilos de legenda e gancho, paletas de cores, títulos e hashtags.
-- `wallet.js` — Integração com Supabase (`usuarios` e `carteira_diamantes`), planos (`pack5`, `pack10`, `weekly`), durações (`30s` e `60s`), jobs e assinatura.
-- `manifest.json` — Manifesto PWA (`start_url: ./login.html`, `display: standalone`).
-- `sw.js` — Service Worker (`clipfactory-pwa-v0.002`).
-- `version.json` — Controle de versão (`0.002`).
+- `index.html`: Splash screen de 2s e redirecionamento para `login.html`.
+- `login.html`: Tela de login integrada ao Supabase (`usuarios`, `carteira_diamantes` e Auth) + checagem de versão.
+- `editor.html`: Editor vertical 9:16 com enquadramento câmera + jogo, análise heurística, legendas, gancho e exportação.
+- `presets.js`: Paletas e 50+ presets de estilo para legenda e gancho.
+- `app.js`: Motor de renderização 9:16, remux WebM (ts-ebml), conversor MP4 (`ffmpeg.wasm` single-thread) e AVI MJPEG.
+- `wallet.js`: Integração com carteira de diamantes, assinatura semanal (7 dias · 20/dia), pacotes adicionais (+5 / +10) e consumo atômico sem desconto em caso de erro.
+- `supabase_setup.sql`: Tabelas, políticas RLS e funções RPC (`consumir_video_download` e `estornar_video_download`).
+- `manifest.json`, `sw.js`, `version.json`: Configuração do PWA e cache offline.
 
-> Lembre-se de manter na pasta os arquivos de imagem `icon-192.png` e `icon-512.png` que você já possui.
+## Como implantar
+1. Rode o arquivo `supabase_setup.sql` no SQL Editor do Supabase.
+2. Copie os arquivos de imagem existentes (`splash-bg.jpg`, `icon-192.png`, `icon-512.png`) para a mesma pasta destes arquivos.
+3. Publique a pasta completa na hospedagem (GitHub Pages / Render / Vercel).

@@ -106,10 +106,6 @@ function fixWebmBlobDurationFallback(blob, durationSec) {
     const durationUnits = (safeSec * 1e9) / scaleNs;
     let patched = false;
 
-    // O elemento Duration (0x4489) fica dentro de Segment > Info, sempre perto
-    // do início do arquivo. Corrigir APENAS a primeira ocorrência e parar —
-    // aplicar em todo 0x44 0x89 encontrado corrompe clusters adiante no arquivo
-    // (era isso que gerava vídeos que não abriam).
     const scanLimit = Math.min(bytes.length - 12, 4096);
     for (let i = 0; i < scanLimit; i++) {
       if (bytes[i] === 0x44 && bytes[i + 1] === 0x89) {
@@ -153,11 +149,6 @@ function fixWebmBlobDurationFallback(blob, durationSec) {
 }
 
 function fixWebmBlobDuration(blob, durationSec) {
-  // Corrigir apenas o float de Duration não basta: editores (CapCut, InShot,
-  // Kinemaster…) leem a duração pelo Cues/SeekHead do container — sem eles
-  // o app de edição enxerga só os primeiros segundos (ex.: 7s de um vídeo de 30s)
-  // enquanto players simples transmitem até o fim. O ts-ebml faz o remux
-  // completo do cabeçalho: Duration correta + tabela de Cues + SeekHead.
   const EBMLlib = (typeof window !== "undefined") ? window.EBML : null;
   if (!EBMLlib || !EBMLlib.tools || typeof EBMLlib.tools.makeMetadataSeekable !== "function") {
     return fixWebmBlobDurationFallback(blob, durationSec);
@@ -171,8 +162,6 @@ function fixWebmBlobDuration(blob, durationSec) {
       elms.forEach((elm) => reader.read(elm));
       reader.stop();
 
-      // Duração medida durante a gravação (ticks de timestampScale); se o
-      // gravador não reportou nada, usa a duração esperada do trecho.
       let duration = Number(reader.duration) || 0;
       if (duration <= 0) {
         const scale = Number(reader.timestampScale) || 1000000;
@@ -187,10 +176,73 @@ function fixWebmBlobDuration(blob, durationSec) {
       }
       return new Blob(parts, { type: blob.type || "video/webm" });
     } catch (e) {
-      console.warn("Remux ts-ebml falhou, usando fallback de bytes:", e);
       return fixWebmBlobDurationFallback(blob, durationSec);
     }
   }).catch(() => blob);
+}
+
+/* ============================================================
+   Conversor MP4 (H.264 + AAC) via ffmpeg.wasm single-thread
+   ============================================================ */
+let ffmpegInstance = null;
+
+async function ensureFfmpegLoaded() {
+  if (ffmpegInstance && ffmpegInstance.isLoaded()) return ffmpegInstance;
+
+  if (!window.FFmpeg) {
+    await new Promise((resolve, reject) => {
+      const s = document.createElement("script");
+      s.src = "https://cdn.jsdelivr.net/npm/@ffmpeg/ffmpeg@0.11.6/dist/ffmpeg.min.js";
+      s.onload = resolve;
+      s.onerror = () => reject(new Error("Não foi possível baixar o motor MP4 (ffmpeg.wasm). Verifique sua conexão."));
+      document.head.appendChild(s);
+    });
+  }
+
+  const { createFFmpeg } = window.FFmpeg;
+  ffmpegInstance = createFFmpeg({
+    log: false,
+    mainName: "main",
+    corePath: "https://cdn.jsdelivr.net/npm/@ffmpeg/core-st@0.11.1/dist/ffmpeg-core.js"
+  });
+  await ffmpegInstance.load();
+  return ffmpegInstance;
+}
+
+async function transcodeWebmToMp4(webmBlob, fps, durationSec) {
+  setExportLog("Carregando motor MP4 (ffmpeg.wasm)...", 86);
+  const ff = await ensureFfmpegLoaded();
+  const inBuf = new Uint8Array(await webmBlob.arrayBuffer());
+
+  try { ff.FS("unlink", "in_cut.webm"); } catch (e) {}
+  try { ff.FS("unlink", "out_cut.mp4"); } catch (e) {}
+
+  ff.FS("writeFile", "in_cut.webm", inBuf);
+  setExportLog(`Convertendo para MP4 H.264 (${fps} fps · ${fmt(durationSec)})...`, 92);
+
+  await ff.run(
+    "-i", "in_cut.webm",
+    "-c:v", "libx264",
+    "-preset", "ultrafast",
+    "-crf", "23",
+    "-pix_fmt", "yuv420p",
+    "-r", String(fps),
+    "-c:a", "aac",
+    "-b:a", "128k",
+    "-movflags", "+faststart",
+    "-t", String(Math.max(0.5, Number(durationSec) || 1).toFixed(2)),
+    "out_cut.mp4"
+  );
+
+  const mp4Data = ff.FS("readFile", "out_cut.mp4");
+  try { ff.FS("unlink", "in_cut.webm"); } catch (e) {}
+  try { ff.FS("unlink", "out_cut.mp4"); } catch (e) {}
+
+  if (!mp4Data || mp4Data.byteLength < 1024) {
+    throw new Error("A conversão MP4 gerou um arquivo vazio. Nenhum vídeo foi descontado.");
+  }
+
+  return new Blob([mp4Data.buffer], { type: "video/mp4" });
 }
 
 /* ============================================================
@@ -686,12 +738,8 @@ function initCropControls() {
     };
   }
 
-  if ($("splitUpBtn")) {
-    $("splitUpBtn").onclick = () => setSplitRatio(state.splitRatio - 0.05);
-  }
-  if ($("splitDownBtn")) {
-    $("splitDownBtn").onclick = () => setSplitRatio(state.splitRatio + 0.05);
-  }
+  if ($("splitUpBtn")) $("splitUpBtn").onclick = () => setSplitRatio(state.splitRatio - 0.05);
+  if ($("splitDownBtn")) $("splitDownBtn").onclick = () => setSplitRatio(state.splitRatio + 0.05);
 
   window.addEventListener("resize", positionBoxes);
 }
@@ -989,29 +1037,47 @@ function getSelectedExportFormatInfo() {
   const mode = $("expMode")?.value || "fast";
   const tierKey = $("expTier")?.value || "720p30";
   const isAvi = mode === "avi";
+  const isMp4 = mode === "mp4";
   const is60 = tierKey.endsWith("60");
   const fps = is60 ? 60 : 30;
-  const ext = isAvi ? "avi" : "webm";
-  return { mode, tierKey, isAvi, fps, ext };
+  const ext = isAvi ? "avi" : (isMp4 ? "mp4" : "webm");
+  return { mode, tierKey, isAvi, isMp4, fps, ext };
 }
 
 async function exportAndDownloadClip(clip) {
-  // Exporta primeiro: se a renderização falhar, nada é cobrado.
+  if (typeof window.checkCanDownloadVideos === "function") {
+    const canProceed = await window.checkCanDownloadVideos(1);
+    if (!canProceed) return;
+  }
+
   const result = await exportVerticalCut({
     startOverride: clip.start,
     endOverride: clip.end,
     autoDownload: false,
     fileName: `clipfactory_corte_${clip.idx}_${Math.round(clip.start)}s`
   });
-  if (!result || !result.url) return;
+  if (!result || !result.url || !result.blob || result.blob.size < 1024) return;
 
-  // Desconto acontece somente quando o arquivo ficou pronto (download real).
+  let authRes = { ok: true, consumedOrigins: [] };
   if (typeof window.authorizeClipDownload === "function") {
-    const allowed = await window.authorizeClipDownload(clip, 1);
-    if (!allowed) return;
+    authRes = await window.authorizeClipDownload(clip, 1);
+    if (!authRes || !authRes.ok) {
+      URL.revokeObjectURL(result.url);
+      return;
+    }
   }
-  triggerBlobDownload(result.url, result.fileName);
-  setTimeout(() => URL.revokeObjectURL(result.url), 120000);
+
+  try {
+    triggerBlobDownload(result.url, result.fileName);
+    setTimeout(() => URL.revokeObjectURL(result.url), 120000);
+  } catch (dlErr) {
+    if (authRes.consumedOrigins && typeof window.refundOneVideoToCloud === "function") {
+      for (const orig of authRes.consumedOrigins) {
+        await window.refundOneVideoToCloud(orig);
+      }
+    }
+    alert("❌ Falha ao iniciar download no navegador. Seu vídeo disponível foi mantido.");
+  }
 }
 
 async function exportAndDownloadCurrent() {
@@ -1076,6 +1142,10 @@ function renderClipList() {
     $("downloadAllLocalBtn").textContent = "⬇ Baixar todos os clipes";
     $("downloadAllLocalBtn").onclick = async () => {
       if (!state.clips.length) return;
+      if (typeof window.checkCanDownloadVideos === "function") {
+        const canProceed = await window.checkCanDownloadVideos(state.clips.length);
+        if (!canProceed) return;
+      }
       for (const c of state.clips) {
         const result = await exportVerticalCut({
           startOverride: c.start,
@@ -1083,10 +1153,13 @@ function renderClipList() {
           autoDownload: false,
           fileName: `clipfactory_corte_${c.idx}`
         });
-        if (!result || !result.url) continue;
+        if (!result || !result.url || !result.blob || result.blob.size < 1024) continue;
         if (typeof window.authorizeClipDownload === "function") {
-          const ok = await window.authorizeClipDownload(c, 1);
-          if (!ok) break;
+          const authRes = await window.authorizeClipDownload(c, 1);
+          if (!authRes || !authRes.ok) {
+            URL.revokeObjectURL(result.url);
+            break;
+          }
         }
         triggerBlobDownload(result.url, result.fileName);
         setTimeout(() => URL.revokeObjectURL(result.url), 120000);
@@ -1441,9 +1514,9 @@ async function exportVerticalCut(opts = {}) {
   const videoEl = $("videoEl");
   if (!state.file || !videoEl.src) {
     alert("Envie um vídeo primeiro.");
-    return;
+    return null;
   }
-  if (state.isExporting) return;
+  if (state.isExporting) return null;
 
   applyLoadedDuration(videoEl);
 
@@ -1476,7 +1549,7 @@ async function exportVerticalCut(opts = {}) {
   if (btn) btn.disabled = true;
   state.isExporting = true;
   if ($("expResult")) $("expResult").innerHTML = "";
-    setExportLog(`Preparando exportação (${spec.w}×${spec.h} · ${spec.fps} fps)...`, 8);
+  setExportLog(`Preparando exportação ${fmtInfo.ext.toUpperCase()} (${spec.w}×${spec.h} · ${spec.fps} fps)...`, 8);
 
   let videoStream = null;
   let audioCtx = null;
@@ -1516,11 +1589,6 @@ async function exportVerticalCut(opts = {}) {
 
     combinedStream = new MediaStream(tracks);
 
-    // Gravar sempre em WebM: o remux com ts-ebml (fixWebmBlobDuration) regrava
-    // Duration + Cues + SeekHead e o arquivo abre completo em qualquer editor.
-    // NÃO usar video/mp4 do MediaRecorder: o Chrome grava MP4 fragmentado (fMP4),
-    // que players tocam inteiro mas editores (CapCut, InShot, Kinemaster) leem
-    // só o primeiro fragmento — aparece 6-7s de um clipe de 30s.
     const candidateMimeTypes = [
       "video/webm;codecs=vp9,opus",
       "video/webm;codecs=vp8,opus",
@@ -1528,7 +1596,6 @@ async function exportVerticalCut(opts = {}) {
       "video/webm"
     ];
     const mimeType = candidateMimeTypes.find(m => MediaRecorder.isTypeSupported(m)) || "video/webm";
-    const isMp4Recording = mimeType.indexOf("mp4") !== -1;
 
     recorder = new MediaRecorder(combinedStream, {
       mimeType,
@@ -1589,8 +1656,8 @@ async function exportVerticalCut(opts = {}) {
 
       if (nowMs - lastUiUpdate > 160) {
         lastUiUpdate = nowMs;
-        const pct = 10 + clamp(((videoEl.currentTime - startSec) / actualDurationSec) * 82, 0, 82);
-        setExportLog(`Renderizando ${spec.fps}fps · ${fmt(videoEl.currentTime)} / ${fmt(endSec)}...`, pct);
+        const pct = 10 + clamp(((videoEl.currentTime - startSec) / actualDurationSec) * 74, 0, 74);
+        setExportLog(`Renderizando ${fmtInfo.ext.toUpperCase()} ${spec.fps}fps · ${fmt(videoEl.currentTime)} / ${fmt(endSec)}...`, pct);
       }
     };
 
@@ -1630,9 +1697,6 @@ async function exportVerticalCut(opts = {}) {
       }
 
       videoEl.addEventListener("ended", finish, { once: true });
-      // Folga generosa: se o vídeo renderiza mais lento que tempo real (canvas
-      // pesado), o gravador continua até atingir o fim do trecho em vez de
-      // terminar no meio e cortar o vídeo.
       setTimeout(finish, Math.ceil((actualDurationSec * 2 + 6) * 1000));
     });
 
@@ -1648,12 +1712,12 @@ async function exportVerticalCut(opts = {}) {
 
     try { audioSource?.disconnect(audioDest); } catch (e) {}
     try { audioDest?.disconnect(); } catch (e) {}
-
     try { combinedStream?.getTracks().forEach(t => t.stop()); } catch (e) {}
     try { videoStream?.getTracks().forEach(t => t.stop()); } catch (e) {}
 
-    const recExt = fmtInfo.isAvi ? "avi" : (isMp4Recording ? "mp4" : "webm");
-    let finalBlob = isMp4Recording ? rawBlob : await fixWebmBlobDuration(rawBlob, actualDurationSec);
+    let seekableWebmBlob = await fixWebmBlobDuration(rawBlob, actualDurationSec);
+    let finalBlob = seekableWebmBlob;
+    const recExt = fmtInfo.ext;
     let outName = opts.fileName || `clipfactory_corte_${spec.w}x${spec.h}_${spec.fps}fps`;
     outName = outName.replace(/\.[^.]+$/, "") + "." + recExt;
 
@@ -1667,10 +1731,16 @@ async function exportVerticalCut(opts = {}) {
         aviFrames.push(bytes);
       }
       finalBlob = buildAviFromJpegFrames(aviFrames, spec.w, spec.h, spec.fps);
+    } else if (fmtInfo.isMp4) {
+      finalBlob = await transcodeWebmToMp4(seekableWebmBlob, spec.fps, actualDurationSec);
     }
 
     offCanvas.width = 1;
     offCanvas.height = 1;
+
+    if (!finalBlob || finalBlob.size < 1024) {
+      throw new Error("O arquivo gerado ficou inválido ou vazio. Nenhum vídeo disponível foi descontado.");
+    }
 
     const url = URL.createObjectURL(finalBlob);
     setExportLog(`Corte ${recExt.toUpperCase()} (${spec.fps} fps · ${fmt(actualDurationSec)}) pronto!`, 100);
@@ -1685,20 +1755,23 @@ async function exportVerticalCut(opts = {}) {
         </div>`;
     }
 
-    // Com autoDownload === false, devolve o blob pronto para o chamador cobrar
-    // a cota/credits ANTES de entregar o arquivo (desconto garantido no download).
     if (opts.autoDownload === false) {
       return { blob: finalBlob, url, fileName: outName, durationSec: actualDurationSec };
     }
     triggerBlobDownload(url, outName);
     setTimeout(() => URL.revokeObjectURL(url), 120000);
+    return { blob: finalBlob, url, fileName: outName, durationSec: actualDurationSec };
   } catch (err) {
     if (recorder && recorder.state !== "inactive") {
       try { recorder.stop(); } catch (e) {}
     }
     try { combinedStream?.getTracks().forEach(t => t.stop()); } catch (e) {}
     try { videoStream?.getTracks().forEach(t => t.stop()); } catch (e) {}
-    setExportLog("Falha na exportação: " + err.message, 0);
+    offCanvas.width = 1;
+    offCanvas.height = 1;
+    setExportLog("❌ Falha na exportação (nenhum vídeo foi descontado): " + err.message, 0);
+    alert("❌ Falha na exportação: " + err.message + "\n\nNenhum vídeo disponível foi descontado.");
+    return null;
   } finally {
     state.isExporting = false;
     if (btn) btn.disabled = false;

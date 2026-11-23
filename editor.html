@@ -40,9 +40,8 @@
 body{
   min-height:100vh;
   background:
-    radial-gradient(860px 460px at 82% -10%, rgba(20,108,67,.28), transparent 60%),
-    radial-gradient(660px 420px at -10% 85%, rgba(15,81,50,.24), transparent 60%),
-    linear-gradient(180deg, var(--bg2), var(--bg));
+    linear-gradient(rgba(3, 7, 5, 0.78), rgba(3, 7, 5, 0.88)),
+    url("./splash-bg.jpg") center center / cover fixed no-repeat;
   color:var(--txt);
   font-family:system-ui,-apple-system,"Segoe UI",Roboto,sans-serif;
   padding-bottom:44px;
@@ -99,7 +98,6 @@ input,select,textarea{
   border-radius:10px;padding:8px 10px;font-size:13px;width:100%;
 }
 input:focus,select:focus,textarea:focus{outline:none;border-color:var(--border2);box-shadow:0 0 0 2px rgba(34,197,94,.15)}
-textarea{resize:vertical;font-family:inherit}
 label{font-size:12px;color:#b7dec7;font-weight:700;display:block;margin:8px 0 4px}
 .row{display:flex;gap:10px;flex-wrap:wrap;align-items:center}
 .row>*{flex:1;min-width:120px}
@@ -115,25 +113,21 @@ label{font-size:12px;color:#b7dec7;font-weight:700;display:block;margin:8px 0 4p
   width:100%;background:linear-gradient(135deg,var(--upd-btn),#7f1d1d);color:#fff;
   border:1px solid var(--upd-border);border-radius:10px;padding:9px 12px;font-size:12px;font-weight:800;cursor:pointer;
 }
-.btn-update:hover{background:linear-gradient(135deg,var(--upd-btn-hover),var(--upd-btn))}
-
 .swatches{display:flex;gap:7px;flex-wrap:wrap;margin:6px 0 2px}
-.sw{width:26px;height:26px;border-radius:50%;border:2px solid rgba(255,255,255,.25);cursor:pointer;transition:.15s}
-.sw:hover{transform:scale(1.12)}
+.sw{width:26px;height:26px;border-radius:50%;border:2px solid rgba(255,255,255,.25);cursor:pointer}
 .sw.sel{border-color:#fff;box-shadow:0 0 0 2px var(--acc2),0 0 10px var(--glow)}
 
 .presetGrid{display:grid;grid-template-columns:repeat(auto-fill,minmax(120px,1fr));gap:8px;margin:8px 0;max-height:220px;overflow:auto;padding:2px}
 .presetItem{
   border:1px solid var(--border);border-radius:10px;padding:8px 6px;text-align:center;
-  cursor:pointer;background:var(--panel2);transition:.15s;overflow:hidden;
+  cursor:pointer;background:var(--panel2);overflow:hidden;
 }
-.presetItem:hover{border-color:var(--border2)}
 .presetItem.sel{border-color:var(--acc2);box-shadow:0 0 0 2px var(--acc2)}
 .presetItem .pv{font-size:15px;font-weight:800;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;display:block;margin-bottom:4px}
 .presetItem .pn{font-size:10px;color:var(--muted);white-space:nowrap;overflow:hidden;text-overflow:ellipsis;display:block}
 
 #step1{max-width:640px;margin:26px auto;text-align:center}
-#drop{border:2px dashed var(--border2);border-radius:18px;padding:42px 20px;cursor:pointer;transition:.2s;background:rgba(12,34,23,.35)}
+#drop{border:2px dashed var(--border2);border-radius:18px;padding:42px 20px;cursor:pointer;background:rgba(12,34,23,.35)}
 #drop:hover{border-color:var(--acc2);background:rgba(20,108,67,.2)}
 #drop .big{font-size:42px}
 
@@ -203,42 +197,21 @@ a.dl{display:inline-block;margin-top:10px;background:linear-gradient(135deg,var(
   position:fixed;right:14px;bottom:10px;font-size:11px;font-weight:800;letter-spacing:.6px;
   color:#86efac;background:rgba(5,16,10,.9);border:1px solid var(--border);padding:4px 10px;border-radius:99px;z-index:30;
 }
-
 #installPwaBtn {
   font-size: 14px !important;
   font-weight: 800 !important;
   padding: 10px 14px !important;
   min-height: 42px !important;
 }
-
+.clipModalBackdrop {
+  position: fixed;inset: 0;background: rgba(0, 0, 0, 0.82);z-index: 9999;
+  display: flex;align-items: center;justify-content: center;padding: 16px;
+}
+.clipModalBox {
+  width: 100%;max-width: 440px;background: #07140e;border: 1px solid #1f5138;
+  border-radius: 16px;padding: 16px;color: #e9fff2;box-shadow: 0 20px 60px rgba(0,0,0,0.85);
+}
 </style>
-
-<style id="cfBgOverride">
-  body {
-    background: linear-gradient(rgba(3, 7, 5, 0.78), rgba(3, 7, 5, 0.88)), url("./splash-bg.jpg") center center / cover fixed no-repeat !important;
-  }
-  .clipModalBackdrop {
-    position: fixed;
-    inset: 0;
-    background: rgba(0, 0, 0, 0.82);
-    z-index: 9999;
-    display: flex;
-    align-items: center;
-    justify-content: center;
-    padding: 16px;
-  }
-  .clipModalBox {
-    width: 100%;
-    max-width: 440px;
-    background: #07140e;
-    border: 1px solid #1f5138;
-    border-radius: 16px;
-    padding: 16px;
-    color: #e9fff2;
-    box-shadow: 0 20px 60px rgba(0,0,0,0.85);
-  }
-</style>
-
 </head>
 <body>
 <header>
@@ -321,7 +294,7 @@ a.dl{display:inline-block;margin-top:10px;background:linear-gradient(135deg,var(
         <div class="card-h"><h2>3. Melhores momentos (heurístico)</h2><button class="collapse-btn">▾</button></div>
         <div class="card-body">
           <div id="clipList"><p class="signal">Clique em <b>Analisar melhores momentos</b> para gerar sugestões de corte com nota.</p></div>
-          <div class="row" style="margin-top:8px"><button class="ghost small" id="downloadAllLocalBtn" style="display:none">⬇ Baixar todos (cobra o plano escolhido 1×)</button></div>
+          <div class="row" style="margin-top:8px"><button class="ghost small" id="downloadAllLocalBtn" style="display:none">⬇ Baixar todos os clipes</button></div>
           <div class="formula">
             <b>Como a nota é calculada</b> (0–100, janela deslizante de cortes):<br>
             <code>Nota = 50×PicoDeÁudio + 30×Movimento/CortesDeCena + 20×Intensidade</code>
@@ -337,7 +310,7 @@ a.dl{display:inline-block;margin-top:10px;background:linear-gradient(135deg,var(
           <div id="previewWrap">
             <canvas id="previewCanvas" width="1080" height="1920"></canvas>
           </div>
-                    <p class="signal" style="text-align:center">Arraste na prévia para mover <b style="color:var(--warn)">divisória</b>, <b style="color:var(--warn)">gancho</b> e <b style="color:var(--acc2)">legenda</b>.</p>
+          <p class="signal" style="text-align:center">Arraste na prévia para mover <b style="color:var(--warn)">divisória</b>, <b style="color:var(--warn)">gancho</b> e <b style="color:var(--acc2)">legenda</b>.</p>
           <div class="row" style="width:100%;gap:8px;margin-bottom:4px">
             <button type="button" class="ghost small" id="splitUpBtn" style="flex:1">▲ Subir divisória (Jogo +)</button>
             <button type="button" class="ghost small" id="splitDownBtn" style="flex:1">▼ Descer divisória (Câmera +)</button>
@@ -437,8 +410,8 @@ a.dl{display:inline-block;margin-top:10px;background:linear-gradient(135deg,var(
           <label>Formato</label>
           <select id="expMode">
             <option value="fast">WebM vertical — rápido, queima legenda + gancho (recomendado)</option>
-            <option value="avi">AVI vertical (30 / 60 fps) — queima legenda + gancho</option>
             <option value="mp4">MP4 vertical (H.264) via ffmpeg.wasm</option>
+            <option value="avi">AVI vertical (30 / 60 fps) — queima legenda + gancho</option>
           </select>
           <label>Resolução e FPS</label>
           <select id="expTier">
@@ -459,64 +432,18 @@ a.dl{display:inline-block;margin-top:10px;background:linear-gradient(135deg,var(
 </main>
 
 <div class="footer">ClipFactory × WaveCombat Hub — <a style="color:var(--acc2)" href="https://youtube.com/@capudooficial7?si=awSkNhuT4YY177Yp" target="_blank" rel="noopener">inscreva-se no canal ↗</a></div>
-<div id="appVersion">v0.012</div>
+<div id="appVersion">v0.015</div>
 
-  </script>
 <script src="https://cdn.jsdelivr.net/npm/ts-ebml@3.0.2/dist/EBML.min.js"></script>
 <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
-<script>
-(function () {
-  window.latestUpdateUrl = "./index.html";
-})();
-</script>
-<script>
-async function triggerRealUpdate(btnEl, statusFn) {
-  if (btnEl) {
-    btnEl.disabled = true;
-    btnEl.textContent = "Baixando e aplicando atualização…";
-  }
-  if (statusFn) statusFn("Baixando nova versão e limpando cache antigo…", "ok");
-  try {
-    if ("serviceWorker" in navigator) {
-      const regs = await navigator.serviceWorker.getRegistrations();
-      for (const r of regs) {
-        await r.update().catch(() => {});
-        if (r.waiting) r.waiting.postMessage({ type: "SKIP_WAITING" });
-      }
-    }
-    if ("caches" in window) {
-      const keys = await caches.keys();
-      await Promise.all(keys.map(k => caches.delete(k)));
-    }
-    // Prefetch core updated files so the new version is downloaded right away
-    const coreFiles = ["./index.html", "./login.html", "./editor.html", "./app.js", "./wallet.js", "./presets.js", "./manifest.json", "./version.json"];
-    await Promise.all(coreFiles.map(u => fetch(`${u}?_upd=${Date.now()}`, { cache: "no-store" }).catch(() => null)));
-  } catch (e) {}
-
-  // If version.json specifies a downloadable zip/package URL, start download too
-  if (window.__cfPackageUrl) {
-    const dl = document.createElement("a");
-    dl.href = window.__cfPackageUrl;
-    dl.download = window.__cfPackageUrl.split("/").pop() || "clipfactory-update.zip";
-    document.body.appendChild(dl);
-    dl.click();
-    dl.remove();
-  }
-
-  const target = (window.latestUpdateUrl || "./index.html");
-  const sep = target.includes("?") ? "&" : "?";
-  setTimeout(() => {
-    window.location.replace(`${target}${sep}v=${EDITOR_VERSION}&t=${Date.now()}`);
-  }, 350);
-}
-</script>
 <script src="./presets.js"></script>
 <script src="./app.js"></script>
 <script src="./wallet.js"></script>
 <script>
 "use strict";
-const EDITOR_VERSION = "0.014";
+const EDITOR_VERSION = "0.015";
 document.getElementById("appVersion").textContent = "v" + EDITOR_VERSION;
+window.latestUpdateUrl = "./index.html";
 
 if ("serviceWorker" in navigator) {
   window.addEventListener("load", () => {
@@ -542,16 +469,35 @@ function isNewerVersion(remoteVer, localVer) {
     const res = await fetch(`./version.json?t=${Date.now()}`, { cache: "no-store" });
     if (!res.ok) return;
     const data = await res.json();
-  if (data && data.package_url) { window.__cfPackageUrl = data.package_url; }
-  if (data && isNewerVersion(data.version, EDITOR_VERSION)) {
-    document.getElementById("remoteVerLabel").textContent = `v${data.version}`;
-    document.getElementById("updateBanner").classList.add("show");
-  }
+    if (data && isNewerVersion(data.version, EDITOR_VERSION)) {
+      window.latestUpdateUrl = data.url || "./index.html";
+      document.getElementById("remoteVerLabel").textContent = `v${data.version}`;
+      document.getElementById("updateBanner").classList.add("show");
+    }
   } catch (e) {}
 })();
 
-document.getElementById("updateBtn").addEventListener("click", () => triggerRealUpdate(document.getElementById("updateBtn"), null));
+document.getElementById("updateBtn").addEventListener("click", async () => {
+  const btn = document.getElementById("updateBtn");
+  btn.disabled = true;
+  btn.textContent = "Baixando e aplicando atualização…";
+  try {
+    if ("serviceWorker" in navigator) {
+      const regs = await navigator.serviceWorker.getRegistrations();
+      for (const r of regs) {
+        await r.update().catch(() => {});
+        if (r.waiting) r.waiting.postMessage({ type: "SKIP_WAITING" });
+      }
+    }
+    if ("caches" in window) {
+      const keys = await caches.keys();
+      await Promise.all(keys.map(k => caches.delete(k)));
+    }
+  } catch (e) {}
+  setTimeout(() => {
+    window.location.replace(`${window.latestUpdateUrl}?v=${EDITOR_VERSION}&t=${Date.now()}`);
+  }, 300);
+});
 </script>
-<script type="module" src="https://static.cloudflareinsights.com/beacon.min.js/vce701823e78c4301a35b7e07294d87301792088814092" integrity="sha512-UKNk8GbxkABxKcXYuLkO16EleLGUkcvJWtpSNmExE0Too3ZaFAxTscNWEc1OdAv5/BikHawapSCaiD2XCmp+Bw==" data-cf-beacon='{"version":"2024.11.0","token":"4edd5f8ec12a48cfa682ab8261b80a79","spa":2}' crossorigin="anonymous"></script>
 </body>
 </html>

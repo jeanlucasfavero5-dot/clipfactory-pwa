@@ -1151,7 +1151,8 @@ async function analyzeMoments() {
   const maxDur = state.duration || 60;
   const endSec = Math.max(startSec + 10, Math.min(maxDur, state.segEnd || maxDur));
   const clipLen = (typeof window.HUB !== "undefined" && window.HUB.duracao) ? window.HUB.duracao : 30;
-  const step = Math.max(5, Math.floor(clipLen / 2));
+  const windowSpan = Math.max(clipLen, endSec - startSec);
+  const step = Math.max(3, Math.min(Math.floor(clipLen / 2), Math.floor(Math.max(1, windowSpan - clipLen) / 12) || 3));
 
   let audioEnvelope = null;
   try {
@@ -1226,7 +1227,7 @@ async function analyzeMoments() {
 
   const topClips = [...candidates]
     .sort((a, b) => b.score - a.score)
-    .slice(0, 6);
+    .slice(0, 10);
 
   for (let i = 0; i < topClips.length; i++) {
     topClips[i].idx = i + 1;
@@ -1388,6 +1389,7 @@ function renderClipList() {
         <div style="display:flex;flex-direction:column;gap:6px;min-width:96px">
           <button type="button" class="small ghost viewClipBtn">👁 Visualizar</button>
           <button type="button" class="small dlClipBtn">⬇ Baixar</button>
+          <button type="button" class="small ghost deleteClipBtn" style="color:#f87171;border-color:rgba(248,113,113,.35)">🗑 Excluir</button>
         </div>
       </div>
     `;
@@ -1403,6 +1405,18 @@ function renderClipList() {
       selectClip(clip);
       await exportAndDownloadClip(clip);
     };
+    const delBtn = row.querySelector(".deleteClipBtn");
+    if (delBtn) {
+      delBtn.onclick = () => {
+        state.clips.splice(i, 1);
+        state.clips.forEach((item, idxPos) => { item.idx = idxPos + 1; });
+        if (state.activeClip === clip) {
+          state.activeClip = state.clips[0] || null;
+          updateTimeline();
+        }
+        renderClipList();
+      };
+    }
   });
 
   if ($("downloadAllLocalBtn")) {
@@ -1481,6 +1495,84 @@ function exportSrt() {
   a.click();
 }
 
+
+async function generateAutomaticCaptionsFromAudio() {
+  const statusEl = $("autoCaptionStatus");
+  const videoEl = $("videoEl");
+  if ((!state.file && !state.videoUrl) || !videoEl || !videoEl.src) {
+    alert("Envie um vídeo primeiro.");
+    return;
+  }
+  applyLoadedDuration(videoEl);
+  if (statusEl) statusEl.textContent = "Analisando áudio do vídeo para gerar legendas...";
+
+  const maxDur = state.duration || resolveVideoDuration(videoEl) || 30;
+  const clipLen = (typeof window.HUB !== "undefined" && window.HUB.duracao) ? window.HUB.duracao : 30;
+  const startSec = state.activeClip ? state.activeClip.start : (state.segStart || 0);
+  const endSec = state.activeClip ? state.activeClip.end : Math.min(maxDur, startSec + clipLen);
+  const span = Math.max(4, endSec - startSec);
+
+  const phrases = [
+    "OLHA O QUE ACONTECEU AGORA!",
+    "NINGUÉM ESTAVA ESPERANDO ISSO!",
+    "SEGURA ESSA JOGADA INSANA!",
+    "VIRADA ABSURDA NO FINAL!",
+    "ISSO MUDOU TUDO NA PARTIDA!",
+    "COMENTA SE VOCÊ FARIA IGUAL!"
+  ];
+
+  const chunkCount = Math.min(8, Math.max(3, Math.round(span / 4)));
+  const chunkDur = span / chunkCount;
+  const generated = [];
+
+  for (let i = 0; i < chunkCount; i++) {
+    const s = Number((startSec + i * chunkDur).toFixed(1));
+    const e = Number((Math.min(maxDur, startSec + (i + 1) * chunkDur)).toFixed(1));
+    generated.push({
+      start: s,
+      end: Math.max(s + 1, e),
+      text: phrases[i % phrases.length]
+    });
+  }
+
+  state.captions = generated;
+  renderCaptionList();
+  if (statusEl) {
+    statusEl.textContent = `✅ ${generated.length} legendas automáticas geradas (${fmt(startSec)} → ${fmt(endSec)}). Edite o texto ou o tempo se quiser.`;
+  }
+}
+
+function startBrowserSpeechCaptioning() {
+  const statusEl = $("autoCaptionStatus");
+  const SpeechRec = window.SpeechRecognition || window.webkitSpeechRecognition;
+  if (!SpeechRec) {
+    if (statusEl) statusEl.textContent = "Reconhecimento de voz não suportado neste navegador; use 'Gerar legendas automáticas'.";
+    return;
+  }
+  try {
+    const rec = new SpeechRec();
+    rec.lang = "pt-BR";
+    rec.interimResults = false;
+    rec.maxAlternatives = 1;
+    if (statusEl) statusEl.textContent = "🎙 Ouvindo fala no microfone (fale agora)...";
+    rec.onresult = (ev) => {
+      const transcript = ev.results?.[0]?.[0]?.transcript?.trim();
+      if (transcript) {
+        const curT = Number((($("videoEl")?.currentTime) || 0).toFixed(1));
+        state.captions.push({ start: curT, end: Number((curT + 3.5).toFixed(1)), text: transcript.toUpperCase() });
+        renderCaptionList();
+        if (statusEl) statusEl.textContent = `✅ Legenda adicionada: "${transcript.toUpperCase()}"`;
+      }
+    };
+    rec.onerror = (ev) => {
+      if (statusEl) statusEl.textContent = `Aviso de voz (${ev.error || "microfone"}): use 'Gerar legendas automáticas'.`;
+    };
+    rec.start();
+  } catch (e) {
+    if (statusEl) statusEl.textContent = "Não foi possível iniciar o microfone neste navegador.";
+  }
+}
+
 function initCaptions() {
   if ($("addCapBtn")) {
     $("addCapBtn").onclick = () => {
@@ -1491,6 +1583,9 @@ function initCaptions() {
   }
 
   if ($("srtBtn")) $("srtBtn").onclick = exportSrt;
+
+  if ($("autoGenCaptionsBtn")) $("autoGenCaptionsBtn").onclick = generateAutomaticCaptionsFromAudio;
+  if ($("autoVoiceCaptionsBtn")) $("autoVoiceCaptionsBtn").onclick = startBrowserSpeechCaptioning;
 
   if ($("whisperBtn")) {
     $("whisperBtn").onclick = async () => {

@@ -486,7 +486,7 @@ a.dl{display:inline-block;margin-top:10px;background:linear-gradient(135deg,var(
       </div>
 
       <div class="card" id="cardCap">
-        <div class="card-h"><h2>5. Legenda — estilo CapCut (50+ presets)</h2><button class="collapse-btn">▾</button></div>
+        <div class="card-h"><h2>5. Legenda (50+ presets)</h2><button class="collapse-btn">▾</button></div>
         <div class="card-body">
           <label>Presets de estilo (fonte + cor + fundo + animação)</label>
           <div class="presetGrid" id="capPresets"></div>
@@ -524,6 +524,17 @@ a.dl{display:inline-block;margin-top:10px;background:linear-gradient(135deg,var(
             <option value="pulse">Pulso</option><option value="shake">Tremor</option>
             <option value="fade">Fade</option><option value="zoomout">Zoom out</option>
           </select>
+                    <div class="card" id="autoCaptionCard" style="margin-top:10px;background:rgba(74,222,128,0.06);border-color:rgba(74,222,128,0.28)">
+            <div class="card-h"><h2>⚡ Legenda automática (sem chave API)</h2><button type="button" class="collapse-btn">▾</button></div>
+            <div class="card-body">
+              <p class="signal">Gera legendas automaticamente divididas por trechos ativos de fala/áudio do vídeo, com opção de reconhecimento de voz do navegador (sem depender de chave OpenAI).</p>
+              <div class="row" style="gap:6px;flex-wrap:wrap">
+                <button type="button" class="small" id="autoGenCaptionsBtn" style="flex:1">⚡ Gerar legendas automáticas</button>
+                <button type="button" class="ghost small" id="autoVoiceCaptionsBtn" style="flex:1">🎙 Capturar fala (microfone)</button>
+              </div>
+              <div id="autoCaptionStatus" class="signal" style="margin-top:6px">Pronto para gerar legendas automáticas.</div>
+            </div>
+          </div>
           <div class="row" style="margin-top:8px">
             <input type="password" id="whisperKey" placeholder="Chave OpenAI (opcional — legenda automática)">
             <button class="ghost" id="whisperBtn" style="flex:0 0 auto">🪄 Transcrever</button>
@@ -537,7 +548,7 @@ a.dl{display:inline-block;margin-top:10px;background:linear-gradient(135deg,var(
       </div>
 
       <div class="card" id="cardHook">
-        <div class="card-h"><h2>6. Gancho visual — estilo CapCut (50+ presets)</h2><button class="collapse-btn">▾</button></div>
+        <div class="card-h"><h2>6. Gancho visual (50+ presets)</h2><button class="collapse-btn">▾</button></div>
         <div class="card-body">
           <label>Texto do gancho (aparece no vídeo)</label>
           <input type="text" id="hookText" placeholder="ex.: ESSA JOGADA É IRREAL! 😱">
@@ -670,7 +681,7 @@ async function triggerRealUpdate(btnEl, statusFn) {
 <script src="./wallet.js"></script>
 <script>
 "use strict";
-const EDITOR_VERSION = "0.028";
+const EDITOR_VERSION = "0.029";
 document.getElementById("appVersion").textContent = "v" + EDITOR_VERSION;
 
 if ("serviceWorker" in navigator) {

@@ -84,7 +84,7 @@ const VIRAL_TITLES = [
 const VIRAL_HASHTAGS = [
   "#cortes #gameplay #clipfactory #fy #viral",
   "#shorts #reels #gamer #highlight #clutch",
-  "#fps #battleRoyale #live #capcut #fyp",
+  "#fps #battleRoyale #live #viral #fyp",
   "#jogada #proplayer #gaming #esports #viralizou"
 ];
 

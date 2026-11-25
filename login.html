@@ -1,180 +1,94 @@
 <!DOCTYPE html>
 <html lang="pt-BR">
 <head>
-  <meta charset="UTF-8">
-  <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
-  <title>ClipFactory — Entrar</title>
-  <link rel="manifest" href="./manifest.json">
-  <meta name="theme-color" content="#030705">
-  <style>
-    :root {
-      --bg: #030705;
-      --panel: #08160f;
-      --card: #0c2217;
-      --border: rgba(34, 197, 94, 0.28);
-      --txt: #e9fff2;
-      --muted: #84a893;
-      --acc: #22c55e;
-      --acc-hover: #16a34a;
-      --danger: #f87171;
-    }
-    * { box-sizing: border-box; margin: 0; padding: 0; font-family: system-ui, -apple-system, sans-serif; }
-    body {
-      background: var(--bg);
-      color: var(--txt);
-      min-height: 100vh;
-      display: flex;
-      align-items: center;
-      justify-content: center;
-      padding: 16px;
-      position: relative;
-    }
-    .login-card {
-      background: var(--panel);
-      border: 1px solid var(--border);
-      border-radius: 18px;
-      width: 100%;
-      max-width: 390px;
-      padding: 24px;
-      text-align: center;
-      box-shadow: 0 10px 30px rgba(0,0,0,0.55);
-    }
-    .badge {
-      display: inline-block;
-      background: rgba(34, 197, 94, 0.15);
-      border: 1px solid var(--acc);
-      color: var(--acc);
-      font-size: 11px;
-      font-weight: 700;
-      padding: 4px 10px;
-      border-radius: 20px;
-      margin-bottom: 12px;
-    }
-    .title { font-size: 24px; font-weight: 800; color: #4ade80; margin-bottom: 4px; }
-    .sub { font-size: 12px; color: var(--muted); margin-bottom: 20px; }
-    .input-group { text-align: left; margin-bottom: 14px; }
-    label { display: block; font-size: 11px; font-weight: 700; color: var(--muted); margin-bottom: 6px; }
-    input {
-      width: 100%; background: #040d08; color: var(--txt); border: 1px solid var(--border);
-      border-radius: 10px; padding: 12px; font-size: 14px; outline: none; transition: border-color 0.2s;
-    }
-    input:focus { border-color: var(--acc); }
-    .btn {
-      background: linear-gradient(135deg, #146c43, #0f5132); color: #fff;
-      border: 1px solid rgba(74, 222, 128, 0.5); border-radius: 10px; padding: 12px;
-      font-weight: 700; font-size: 14px; cursor: pointer; width: 100%; margin-top: 8px;
-      transition: background 0.2s;
-    }
-    .btn:hover { background: linear-gradient(135deg, #198754, #146c43); }
-    .btn:disabled { opacity: 0.6; cursor: not-allowed; }
-    .msg { margin-top: 12px; font-size: 12px; min-height: 18px; color: var(--muted); }
-    .msg.err { color: var(--danger); }
-    .ver { position: fixed; bottom: 12px; right: 16px; font-size: 10px; color: var(--muted); font-weight: 700; }
-  </style>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
+<title>ClipFactory — Entrar</title>
+<link rel="manifest" href="./manifest.json">
+<link rel="icon" type="image/png" sizes="192x192" href="./icon-192.png">
+<link rel="apple-touch-icon" href="./icon-192.png">
+<meta name="theme-color" content="#07140e">
+<style>
+:root{
+  --bg:#030705;--bg2:#07140e;--card:rgba(8,22,15,.94);--border:rgba(34,197,94,.24);--border-hi:rgba(74,222,128,.58);
+  --txt:#e9fff2;--muted:#84a893;--btn-g1:#0f5132;--btn-g2:#146c43;--btn-g-hover:#198754;--accent:#22c55e;
+  --upd-bg:#1a0608;--upd-btn:#991b1b;--upd-btn-hover:#dc2626;--upd-border:rgba(248,113,113,.45);--upd-txt:#fecaca;
+}
+*{box-sizing:border-box;margin:0;padding:0}
+body{
+  min-height:100vh;
+  background:radial-gradient(820px 440px at 80% -10%, rgba(20,108,67,.30), transparent 60%),linear-gradient(180deg, var(--bg2), var(--bg));
+  color:var(--txt);font-family:system-ui,-apple-system,sans-serif;display:flex;align-items:center;justify-content:center;padding:20px 16px;
+}
+.login-box{width:100%;max-width:410px;background:var(--card);border:1px solid var(--border);border-radius:20px;padding:26px 22px;backdrop-filter:blur(12px)}
+.brand{text-align:center;margin-bottom:20px}
+.brand-badge{font-size:11px;font-weight:800;color:#86efac;background:rgba(20,108,67,.28);border:1px solid var(--border);padding:4px 12px;border-radius:99px;margin-bottom:10px;display:inline-block}
+.brand h1{font-size:28px;font-weight:900} .brand h1 span{color:var(--accent)}
+.field{margin-bottom:14px}
+label{display:block;font-size:12px;font-weight:700;color:#b7dec7;margin-bottom:6px}
+input[type="text"],input[type="password"]{width:100%;background:rgba(3,10,7,.92);border:1px solid var(--border);color:var(--txt);border-radius:12px;padding:12px 13px;font-size:14px;outline:none}
+.btn-primary{width:100%;background:linear-gradient(135deg, var(--btn-g2), var(--btn-g1));color:#fff;border:1px solid var(--border-hi);border-radius:12px;padding:13px;font-size:15px;font-weight:800;cursor:pointer}
+#statusBox{margin-top:14px;font-size:12px;text-align:center}
+#statusBox.err{color:#fca5a5} #statusBox.ok{color:#86efac}
+#appVersion{position:fixed;right:14px;bottom:10px;font-size:11px;font-weight:800;color:#86efac;background:rgba(5,16,10,.88);border:1px solid var(--border);padding:4px 10px;border-radius:99px}
+</style>
 </head>
 <body>
-  <div class="login-card">
-    <div class="badge">PWA • ClipFactory v0.032</div>
-    <div class="title">ClipFactory</div>
-    <div class="sub">Entre com seu usuário/ID e senha do Hub</div>
-
-    <form id="loginForm">
-      <div class="input-group">
-        <label for="userInput">Usuário ou ID (id_jogador)</label>
-        <input type="text" id="userInput" placeholder="Digite seu ID ou nick" required autocomplete="username">
-      </div>
-      <div class="input-group">
-        <label for="passInput">Senha</label>
-        <input type="password" id="passInput" placeholder="••••••••••••" required autocomplete="current-password">
-      </div>
-      <button type="submit" class="btn" id="loginBtn">Entrar no aplicativo</button>
-      <div class="msg" id="loginMsg"></div>
-    </form>
+<main class="login-box">
+  <div class="brand">
+    <div class="brand-badge">PWA • ClipFactory v0.031</div>
+    <h1>Clip<span>Factory</span></h1>
+    <p>Entre com seu usuário/ID do Hub</p>
   </div>
+  <form id="loginForm">
+    <div class="field">
+      <label>Usuário ou ID</label>
+      <input type="text" id="loginUser" placeholder="Ex.: capudo7" required>
+    </div>
+    <div class="field">
+      <label>Senha</label>
+      <input type="password" id="loginPass" placeholder="Sua senha" required>
+    </div>
+    <button type="submit" class="btn-primary" id="loginSubmitBtn">Entrar no aplicativo</button>
+  </form>
+  <div id="statusBox"></div>
+</main>
+<div id="appVersion">v0.031</div>
+<script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
+<script>
+const APP_VERSION = "0.031";
+const SUPABASE_URL = "https://ipqjeacdfiomcxfuixdj.supabase.co";
+const SUPABASE_KEY = "sb_publishable_EWW84q_43YbOvMwB_Rua-A_X465PbLP";
+const $ = id => document.getElementById(id);
 
-  <div class="ver">v0.032</div>
-
-  <script>
-    const SUPABASE_URL = "https://ipqjeacdfiomcxfuixdj.supabase.co";
-    const SUPABASE_ANON_KEY = localStorage.getItem("clipfactory_sb_anon_key") || "";
-
-    function setMsg(text, isErr = false) {
-      const el = document.getElementById("loginMsg");
-      el.textContent = text || "";
-      el.className = isErr ? "msg err" : "msg";
+$("loginForm").addEventListener("submit", async e => {
+  e.preventDefault();
+  const identifier = $("loginUser").value.trim();
+  const password = $("loginPass").value;
+  if (!identifier || !password) return;
+  $("statusBox").textContent = "Verificando...";
+  try {
+    const sb = window.supabase.createClient(SUPABASE_URL, SUPABASE_KEY);
+    const byId = await sb.from("usuarios").select("*").eq("id_jogador", identifier).maybeSingle();
+    let userRow = byId.data;
+    if (!userRow) {
+      const byNick = await sb.from("usuarios").select("*").ilike("nick", identifier).maybeSingle();
+      userRow = byNick.data;
     }
-
-    async function authenticateUser(idJogador, pass) {
-      if (!SUPABASE_ANON_KEY) {
-        return {
-          ok: true,
-          offlineFallback: true,
-          user: { id_jogador: idJogador, nick: idJogador, pass }
-        };
-      }
-
-      const headers = {
-        apikey: SUPABASE_ANON_KEY,
-        Authorization: `Bearer ${SUPABASE_ANON_KEY}`,
-        "Content-Type": "application/json"
-      };
-
-      const url = `${SUPABASE_URL}/rest/v1/usuarios?id_jogador=eq.${encodeURIComponent(idJogador)}&select=*`;
-      const resp = await fetch(url, { headers });
-      if (!resp.ok) {
-        throw new Error(`Falha ao consultar usuários (${resp.status})`);
-      }
-
-      const rows = await resp.json();
-      if (!Array.isArray(rows) || rows.length === 0) {
-        return { ok: false, error: "Usuário ou ID não encontrado." };
-      }
-
-      const account = rows[0];
-      const storedPass = account.pass ?? account.senha ?? "";
-      if (String(storedPass) !== String(pass)) {
-        return { ok: false, error: "Senha inválida." };
-      }
-
-      return {
-        ok: true,
-        user: {
-          id_jogador: String(account.id_jogador),
-          nick: account.nick || account.nome || String(account.id_jogador)
-        }
-      };
-    }
-
-    document.getElementById("loginForm").addEventListener("submit", async (e) => {
-      e.preventDefault();
-      const btn = document.getElementById("loginBtn");
-      const idJogador = document.getElementById("userInput").value.trim();
-      const pass = document.getElementById("passInput").value;
-
-      if (!idJogador || !pass) {
-        setMsg("Preencha usuário/ID e senha.", true);
-        return;
-      }
-
-      btn.disabled = true;
-      setMsg("Autenticando...");
-
-      try {
-        const result = await authenticateUser(idJogador, pass);
-        if (!result.ok) {
-          setMsg(result.error || "Não foi possível entrar.", true);
-          btn.disabled = false;
-          return;
-        }
-
-        localStorage.setItem("clipfactory_user", JSON.stringify(result.user));
-        setMsg("Acesso liberado! Abrindo ClipFactory...");
-        window.location.href = "./index.html";
-      } catch (err) {
-        setMsg(err.message || "Erro ao autenticar.", true);
-        btn.disabled = false;
-      }
-    });
-  </script>
+    if (!userRow) throw new Error("Usuário ou ID não encontrado.");
+    const storedPass = userRow.senha ?? userRow.password ?? null;
+    if (storedPass !== null && String(storedPass) !== password) throw new Error("Senha incorreta.");
+    
+    const playerId = String(userRow.id_jogador);
+    sessionStorage.setItem("cf_session_user", JSON.stringify({ id_jogador: playerId, nick: userRow.nick || playerId, loggedAt: Date.now() }));
+    
+    // Redireciona para a tela de vincular redes sociais
+    window.location.href = `./redes.html?id=${encodeURIComponent(playerId)}`;
+  } catch (err) {
+    $("statusBox").textContent = err.message || "Erro de login";
+    $("statusBox").className = "err";
+  }
+});
+</script>
 </body>
 </html>

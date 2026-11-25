@@ -1,20 +1,26 @@
 {
-  "name": "ClipFactory v0.032",
+  "name": "ClipFactory",
   "short_name": "ClipFactory",
-  "start_url": "./login.html",
+  "id": "./index.html",
+  "start_url": "./index.html",
+  "scope": "./",
   "display": "standalone",
+  "orientation": "portrait",
   "background_color": "#030705",
-  "theme_color": "#030705",
+  "theme_color": "#07140e",
+  "description": "Editor de cortes verticais 9:16 com redes sociais, legendas, gancho e PWA.",
   "icons": [
     {
-      "src": "icon-192.png",
+      "src": "./icon-192.png",
       "sizes": "192x192",
-      "type": "image/png"
+      "type": "image/png",
+      "purpose": "any"
     },
     {
-      "src": "icon-512.png",
+      "src": "./icon-512.png",
       "sizes": "512x512",
-      "type": "image/png"
+      "type": "image/png",
+      "purpose": "any maskable"
     }
   ]
 }

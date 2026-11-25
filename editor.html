@@ -211,56 +211,6 @@ a.dl{display:inline-block;margin-top:10px;background:linear-gradient(135deg,var(
   min-height: 42px !important;
 }
 
-
-.source-tabs {
-  display: flex;
-  gap: 8px;
-  justify-content: center;
-  margin-bottom: 12px;
-  flex-wrap: wrap;
-}
-.source-tab {
-  background: rgba(15, 81, 50, 0.25);
-  color: var(--text);
-  border: 1px solid var(--border);
-  border-radius: 999px;
-  padding: 6px 14px;
-  font-size: 12px;
-  font-weight: 800;
-  cursor: pointer;
-}
-.source-tab.active {
-  background: linear-gradient(135deg, var(--acc), var(--acc2));
-  color: #fff;
-  border-color: var(--acc2);
-}
-.link-box {
-  margin-top: 12px;
-  padding: 12px;
-  border-radius: 14px;
-  background: rgba(5, 16, 10, 0.72);
-  border: 1px solid var(--border);
-  text-align: left;
-}
-.link-row {
-  display: flex;
-  gap: 8px;
-  flex-wrap: wrap;
-}
-.link-row input[type="url"],
-.link-row input[type="text"] {
-  flex: 1 1 240px;
-  background: rgba(3, 10, 7, 0.92);
-  border: 1px solid var(--border);
-  color: var(--txt);
-  border-radius: 10px;
-  padding: 9px 12px;
-  font-size: 13px;
-  outline: none;
-}
-.link-row input:focus {
-  border-color: var(--acc2);
-}
 .link-note {
   margin-top: 8px;
   font-size: 11px;
@@ -272,16 +222,9 @@ a.dl{display:inline-block;margin-top:10px;background:linear-gradient(135deg,var(
   font-weight: 700;
 }
 .link-note.ok {
-  color: var(--ok);
+  color: var(--good);
   font-weight: 700;
 }
-.quick-source-bar {
-  display: flex;
-  gap: 8px;
-  flex-wrap: wrap;
-  margin-top: 10px;
-}
-
 
 .pre-grid3{display:grid;grid-template-columns:repeat(3,minmax(0,1fr));gap:12px;margin-top:6px;text-align:left}
 @media(max-width:780px){.pre-grid3{grid-template-columns:1fr}}
@@ -294,7 +237,6 @@ a.dl{display:inline-block;margin-top:10px;background:linear-gradient(135deg,var(
 .range-row input[type="number"]{padding:6px 8px;font-size:12px}
 .chk-inline{display:flex;align-items:center;gap:6px;font-size:11px;color:#b7dec7;margin-top:6px;cursor:pointer}
 .chk-inline input{width:auto}
-
 </style>
 
 <style id="cfBgOverride">
@@ -322,7 +264,6 @@ a.dl{display:inline-block;margin-top:10px;background:linear-gradient(135deg,var(
     box-shadow: 0 20px 60px rgba(0,0,0,0.85);
   }
 </style>
-
 </head>
 <body>
 <header>
@@ -423,10 +364,6 @@ a.dl{display:inline-block;margin-top:10px;background:linear-gradient(135deg,var(
             <div id="tlHead"></div>
             <span id="tlTime">0:00 / 0:00</span>
           </div>
-          <div class="quick-source-bar">
-            <input type="url" id="editorQuickUrlInput" placeholder="Colar novo link de vídeo / live para editar..." style="flex:1 1 220px;background:rgba(3,10,7,.92);border:1px solid var(--border);color:var(--txt);border-radius:10px;padding:7px 10px;font-size:12px;outline:none">
-            <button type="button" class="ghost small" id="editorQuickUrlBtn">🔗 Carregar link</button>
-          </div>
           <div id="editorSourceStatus" class="link-note"></div>
           <p class="signal" style="margin-top:6px">Clique na barra para navegar. Arraste as caixas de câmera e jogo e a barra divisória.</p>
 
@@ -473,11 +410,7 @@ a.dl{display:inline-block;margin-top:10px;background:linear-gradient(135deg,var(
           <div id="previewWrap">
             <canvas id="previewCanvas" width="1080" height="1920"></canvas>
           </div>
-                    <p class="signal" style="text-align:center">Arraste na prévia para mover <b style="color:var(--warn)">divisória</b>, <b style="color:var(--warn)">gancho</b> e <b style="color:var(--acc2)">legenda</b>.</p>
-          <div class="row" style="width:100%;gap:8px;margin-bottom:4px">
-            <button type="button" class="ghost small" id="splitUpBtn" style="flex:1">▲ Subir divisória (Jogo +)</button>
-            <button type="button" class="ghost small" id="splitDownBtn" style="flex:1">▼ Descer divisória (Câmera +)</button>
-          </div>
+          <p class="signal" style="text-align:center">Arraste na prévia para mover <b style="color:var(--warn)">divisória</b>, <b style="color:var(--warn)">gancho</b> e <b style="color:var(--acc2)">legenda</b>.</p>
           <div class="row" style="width:100%">
             <div><label>Tamanho da LEGENDA</label><input type="range" id="fontSz" min="24" max="140" value="48"></div>
             <div><label>Tamanho do GANCHO</label><input type="range" id="hookSz" min="28" max="200" value="64"></div>
@@ -524,7 +457,7 @@ a.dl{display:inline-block;margin-top:10px;background:linear-gradient(135deg,var(
             <option value="pulse">Pulso</option><option value="shake">Tremor</option>
             <option value="fade">Fade</option><option value="zoomout">Zoom out</option>
           </select>
-                    <div class="card" id="autoCaptionCard" style="margin-top:10px;background:rgba(74,222,128,0.06);border-color:rgba(74,222,128,0.28)">
+          <div class="card" id="autoCaptionCard" style="margin-top:10px;background:rgba(74,222,128,0.06);border-color:rgba(74,222,128,0.28)">
             <div class="card-h"><h2>⚡ Legenda automática (sem chave API)</h2><button type="button" class="collapse-btn">▾</button></div>
             <div class="card-body">
               <p class="signal">Gera legendas automaticamente divididas por trechos ativos de fala/áudio do vídeo, com opção de reconhecimento de voz do navegador (sem depender de chave OpenAI).</p>
@@ -625,9 +558,8 @@ a.dl{display:inline-block;margin-top:10px;background:linear-gradient(135deg,var(
 </main>
 
 <div class="footer">ClipFactory × WaveCombat Hub — <a style="color:var(--acc2)" href="https://youtube.com/@capudooficial7?si=awSkNhuT4YY177Yp" target="_blank" rel="noopener">inscreva-se no canal ↗</a></div>
-<div id="appVersion">v0.012</div>
+<div id="appVersion">v0.029</div>
 
-  </script>
 <script src="https://cdn.jsdelivr.net/npm/ts-ebml@3.0.2/dist/EBML.min.js"></script>
 <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
 <script>
@@ -654,12 +586,10 @@ async function triggerRealUpdate(btnEl, statusFn) {
       const keys = await caches.keys();
       await Promise.all(keys.map(k => caches.delete(k)));
     }
-    // Prefetch core updated files so the new version is downloaded right away
     const coreFiles = ["./index.html", "./login.html", "./editor.html", "./app.js", "./wallet.js", "./presets.js", "./manifest.json", "./version.json"];
     await Promise.all(coreFiles.map(u => fetch(`${u}?_upd=${Date.now()}`, { cache: "no-store" }).catch(() => null)));
   } catch (e) {}
 
-  // If version.json specifies a downloadable zip/package URL, start download too
   if (window.__cfPackageUrl) {
     const dl = document.createElement("a");
     dl.href = window.__cfPackageUrl;
@@ -708,16 +638,15 @@ function isNewerVersion(remoteVer, localVer) {
     const res = await fetch(`./version.json?t=${Date.now()}`, { cache: "no-store" });
     if (!res.ok) return;
     const data = await res.json();
-  if (data && data.package_url) { window.__cfPackageUrl = data.package_url; }
-  if (data && isNewerVersion(data.version, EDITOR_VERSION)) {
-    document.getElementById("remoteVerLabel").textContent = `v${data.version}`;
-    document.getElementById("updateBanner").classList.add("show");
-  }
+    if (data && data.package_url) { window.__cfPackageUrl = data.package_url; }
+    if (data && isNewerVersion(data.version, EDITOR_VERSION)) {
+      document.getElementById("remoteVerLabel").textContent = `v${data.version}`;
+      document.getElementById("updateBanner").classList.add("show");
+    }
   } catch (e) {}
 })();
 
 document.getElementById("updateBtn").addEventListener("click", () => triggerRealUpdate(document.getElementById("updateBtn"), null));
 </script>
-
 </body>
 </html>

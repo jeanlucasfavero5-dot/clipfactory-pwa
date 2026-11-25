@@ -1,8 +1,9 @@
 -- ============================================================
--- ClipFactory / WaveCombat Hub — Tabelas e Políticas RLS (v0.030)
--- Execute este script no SQL Editor do Supabase se necessário
+-- ClipFactory / WaveCombat Hub — Tabelas e Políticas RLS (v0.010)
+-- Execute este script no SQL Editor do Supabase
 -- ============================================================
 
+-- 1. Tabela de assinaturas semanais (20 clipes/dia por 7 dias)
 create table if not exists public.assinaturas (
   id_jogador text primary key,
   inicio timestamptz not null default now(),
@@ -13,6 +14,7 @@ create table if not exists public.assinaturas (
   updated_at timestamptz not null default now()
 );
 
+-- 2. Tabela de créditos avulsos de download por conta
 create table if not exists public.creditos_videos (
   id_jogador text primary key,
   videos_restantes integer not null default 0,
@@ -20,6 +22,7 @@ create table if not exists public.creditos_videos (
   updated_at timestamptz not null default now()
 );
 
+-- 3. Habilita Row Level Security e libera acesso para anon/authenticated
 alter table public.assinaturas enable row level security;
 alter table public.creditos_videos enable row level security;
 alter table public.carteira_diamantes enable row level security;

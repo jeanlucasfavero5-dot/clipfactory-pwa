@@ -29,26 +29,16 @@ const state = {
     y: 0.78
   },
   hook: {
-    enabled: true,
-    text: "JOGADA INSANA! 🔥",
+    enabled: false,
+    text: "",
     font: "Bebas Neue",
     color: "#ffd166",
     bg: "box",
     bgColor: "#07140e",
     anim: "pop",
     x: 0.5,
-    y: 0.16,
-    line2: "",
-    mode: "box"
+    y: 0.16
   },
-  social: {
-    enabled: true,
-    net: "youtube",
-    handle: "@CapudoOficial",
-    style: "metal-red",
-    y: 0.52
-  },
-  hudOverlay: false,
   draggingOverlay: null,
   isExporting: false
 };
@@ -118,6 +108,10 @@ function fixWebmBlobDurationFallback(blob, durationSec) {
     const durationUnits = (safeSec * 1e9) / scaleNs;
     let patched = false;
 
+    // O elemento Duration (0x4489) fica dentro de Segment > Info, sempre perto
+    // do início do arquivo. Corrigir APENAS a primeira ocorrência e parar —
+    // aplicar em todo 0x44 0x89 encontrado corrompe clusters adiante no arquivo
+    // (era isso que gerava vídeos que não abriam).
     const scanLimit = Math.min(bytes.length - 12, 4096);
     for (let i = 0; i < scanLimit; i++) {
       if (bytes[i] === 0x44 && bytes[i + 1] === 0x89) {
@@ -161,6 +155,11 @@ function fixWebmBlobDurationFallback(blob, durationSec) {
 }
 
 function fixWebmBlobDuration(blob, durationSec) {
+  // Corrigir apenas o float de Duration não basta: editores (CapCut, InShot,
+  // Kinemaster…) leem a duração pelo Cues/SeekHead do container — sem eles
+  // o app de edição enxerga só os primeiros segundos (ex.: 7s de um vídeo de 30s)
+  // enquanto players simples transmitem até o fim. O ts-ebml faz o remux
+  // completo do cabeçalho: Duration correta + tabela de Cues + SeekHead.
   const EBMLlib = (typeof window !== "undefined") ? window.EBML : null;
   if (!EBMLlib || !EBMLlib.tools || typeof EBMLlib.tools.makeMetadataSeekable !== "function") {
     return fixWebmBlobDurationFallback(blob, durationSec);
@@ -174,6 +173,8 @@ function fixWebmBlobDuration(blob, durationSec) {
       elms.forEach((elm) => reader.read(elm));
       reader.stop();
 
+      // Duração medida durante a gravação (ticks de timestampScale); se o
+      // gravador não reportou nada, usa a duração esperada do trecho.
       let duration = Number(reader.duration) || 0;
       if (duration <= 0) {
         const scale = Number(reader.timestampScale) || 1000000;
@@ -463,19 +464,6 @@ function initStyleControls() {
       syncHookToggleLabel();
     };
   }
-  if ($("hookLine2Text")) {
-    $("hookLine2Text").value = state.hook.line2 || "";
-    $("hookLine2Text").oninput = e => {
-      state.hook.line2 = e.target.value;
-    };
-  }
-  if ($("hookBgMode")) {
-    $("hookBgMode").value = state.hook.mode || "box";
-    $("hookBgMode").onchange = e => {
-      state.hook.mode = e.target.value;
-      state.hook.bg = e.target.value === "ripped" ? "box" : e.target.value;
-    };
-  }
   if ($("hookFont")) {
     $("hookFont").value = state.hook.font;
     $("hookFont").onchange = e => { state.hook.font = e.target.value; };
@@ -487,26 +475,6 @@ function initStyleControls() {
   if ($("hookAnim")) {
     $("hookAnim").value = state.hook.anim;
     $("hookAnim").onchange = e => { state.hook.anim = e.target.value; };
-  }
-
-  // Controles da Barrinha Social adicionados
-  if ($("socialToggle")) {
-    $("socialToggle").onchange = e => { state.social.enabled = e.target.checked; };
-  }
-  if ($("socialNet")) {
-    $("socialNet").onchange = e => { state.social.net = e.target.value; };
-  }
-  if ($("socialHandle")) {
-    $("socialHandle").value = state.social.handle;
-    $("socialHandle").oninput = e => { state.social.handle = e.target.value; };
-  }
-  if ($("socialStyle")) {
-    $("socialStyle").value = state.social.style;
-    $("socialStyle").onchange = e => { state.social.style = e.target.value; };
-  }
-  if ($("socialY")) {
-    $("socialY").value = Math.round(state.social.y * 100);
-    $("socialY").oninput = e => { state.social.y = (+e.target.value) / 100; };
   }
 
   if ($("hookToggle")) {
@@ -627,8 +595,8 @@ function attachVideoMetadataHandlers(videoEl, labelText) {
   videoEl.load();
   const onMetaOrDur = () => {
     applyLoadedDuration(videoEl);
-    positionBoxes();
-    updateTimeline();
+    updateCropBoxUI();
+    updateTimelineUI();
   };
   videoEl.onloadedmetadata = onMetaOrDur;
   videoEl.ondurationchange = onMetaOrDur;
@@ -637,7 +605,7 @@ function attachVideoMetadataHandlers(videoEl, labelText) {
     if (!state.duration && videoEl.duration > 0) {
       applyLoadedDuration(videoEl);
     }
-    updateTimeline();
+    updateTimelineUI();
   };
   if ($("step1")) $("step1").classList.add("hidden");
   if ($("editor")) $("editor").classList.remove("hidden");
@@ -700,7 +668,7 @@ async function loadVideoFromUrl(rawUrl) {
       attachVideoMetadataHandlers(videoEl, state.sourceName || cleanUrl);
       if (isLikelyPlaylistOrPage) {
         setLinkStatusMessage(
-          "Link carregado no player. Se o navegador não reproduzir diretamente, use o app ClipFactory Desktop ou um link direto de arquivo de vídeo.",
+          "Link carregado no player. Se o navegador não reproduzir diretamente (ex.: live ao vivo, HLS/m3u8 ou página de rede social com proteção/CORS), use o app ClipFactory Desktop ou um link direto de arquivo de vídeo (.mp4 / .webm).",
           "ok"
         );
       } else {
@@ -713,7 +681,7 @@ async function loadVideoFromUrl(rawUrl) {
       if (settled) return;
       settled = true;
       setLinkStatusMessage(
-        "Não foi possível reproduzir este link direto no navegador. Envie um arquivo local ou use o modo Desktop.",
+        "Não foi possível reproduzir este link direto no navegador (pode ser live ao vivo/protegida, bloqueio CORS do servidor ou link de página e não de arquivo de vídeo). Para lives/VODs de plataformas como YouTube ou Twitch, utilize o modo Desktop ou envie um arquivo de vídeo local.",
         "err"
       );
       resolve(false);
@@ -740,6 +708,27 @@ async function loadVideoFromUrl(rawUrl) {
 }
 
 function initSourceAndHookEnhancements() {
+  const tabLocal = $("tabLocalVideo");
+  const tabLink = $("tabLinkVideo");
+  const localPanel = $("localSourcePanel");
+  const linkPanel = $("linkSourcePanel");
+
+  if (tabLocal && tabLink && localPanel && linkPanel) {
+    tabLocal.onclick = () => {
+      tabLocal.classList.add("active");
+      tabLink.classList.remove("active");
+      localPanel.classList.remove("hidden");
+      linkPanel.classList.add("hidden");
+    };
+    tabLink.onclick = () => {
+      tabLink.classList.add("active");
+      tabLocal.classList.remove("active");
+      linkPanel.classList.remove("hidden");
+      localPanel.classList.add("hidden");
+      if ($("step1UrlInput")) $("step1UrlInput").focus();
+    };
+  }
+
   const getRangeMinutes = (startId, endId, fullIfShorterId) => {
     const fullIfShorter = $(fullIfShorterId) ? !!$(fullIfShorterId).checked : true;
     const rawStart = parseFloat($(startId)?.value);
@@ -810,6 +799,7 @@ function initSourceAndHookEnhancements() {
       setTimeout(() => URL.revokeObjectURL(bUrl), 120000);
       setLinkStatusMessage("Vídeo enviado para a pasta Downloads do dispositivo!", "ok");
     } catch (_) {
+      // Dispara link direto na pasta de downloads mesmo quando o servidor exige navegação direta
       triggerBlobDownload(targetUrl, fname);
       setLinkStatusMessage("Solicitação de download enviada para o navegador (pasta Downloads).", "ok");
     }
@@ -842,6 +832,16 @@ function initSourceAndHookEnhancements() {
       const rangeCfg = getRangeMinutes("dlLinkStartMin", "dlLinkEndMin", "dlLinkFullIfShorter");
       const chosenUrl = ($("dlLinkUrlInput")?.value || $("step1UrlInput")?.value || state.videoUrl || "").trim();
       await downloadFromLinkOrCurrent(chosenUrl, rangeCfg, false);
+    };
+  }
+
+    if ($("editorQuickUrlBtn") && $("editorQuickUrlInput")) {
+    $("editorQuickUrlBtn").onclick = () => loadVideoFromUrl($("editorQuickUrlInput").value);
+    $("editorQuickUrlInput").onkeydown = (e) => {
+      if (e.key === "Enter") {
+        e.preventDefault();
+        loadVideoFromUrl($("editorQuickUrlInput").value);
+      }
     };
   }
 
@@ -1020,6 +1020,13 @@ function initCropControls() {
     };
   }
 
+  if ($("splitUpBtn")) {
+    $("splitUpBtn").onclick = () => setSplitRatio(state.splitRatio - 0.05);
+  }
+  if ($("splitDownBtn")) {
+    $("splitDownBtn").onclick = () => setSplitRatio(state.splitRatio + 0.05);
+  }
+
   window.addEventListener("resize", positionBoxes);
 }
 
@@ -1127,7 +1134,6 @@ function renderHeatmap(scores) {
   });
 }
 
-/* Regra solicitada: Se pedir 5 vídeos gera APENAS 5, se pedir 10 gera APENAS 10, se pedir melhores momentos gera APENAS 10 */
 async function analyzeMoments() {
   const videoEl = $("videoEl");
   if ((!state.file && !state.videoUrl) || !videoEl.src) {
@@ -1145,21 +1151,12 @@ async function analyzeMoments() {
   const maxDur = state.duration || 60;
   const endSec = Math.max(startSec + 10, Math.min(maxDur, state.segEnd || maxDur));
   const clipLen = (typeof window.HUB !== "undefined" && window.HUB.duracao) ? window.HUB.duracao : 30;
-  
-  // Limite exato de clipes com base no plano ou pedido (5, 10 ou 10)
-  let clipTargetCount = 10;
-  if (typeof window.HUB !== "undefined" && window.HUB.plano === "pack5") {
-    clipTargetCount = 5;
-  } else if (typeof window.HUB !== "undefined" && window.HUB.plano === "pack10") {
-    clipTargetCount = 10;
-  }
-
   const windowSpan = Math.max(clipLen, endSec - startSec);
   const step = Math.max(3, Math.min(Math.floor(clipLen / 2), Math.floor(Math.max(1, windowSpan - clipLen) / 12) || 3));
 
   let audioEnvelope = null;
   try {
-    if (state.file && state.file.size <= 140 * 1024 * 1024) {
+    if (state.file.size <= 140 * 1024 * 1024) {
       const arrayBuf = await state.file.arrayBuffer();
       const AudioCtx = window.AudioContext || window.webkitAudioContext;
       if (AudioCtx) {
@@ -1230,7 +1227,7 @@ async function analyzeMoments() {
 
   const topClips = [...candidates]
     .sort((a, b) => b.score - a.score)
-    .slice(0, clipTargetCount);
+    .slice(0, 10);
 
   for (let i = 0; i < topClips.length; i++) {
     topClips[i].idx = i + 1;
@@ -1333,13 +1330,8 @@ function getSelectedExportFormatInfo() {
   return { mode, tierKey, isAvi, fps, ext };
 }
 
-/* Regra corrigida: Autorização e desconto obrigatórios ao baixar individualmente ou em lote */
 async function exportAndDownloadClip(clip) {
-  if (typeof window.authorizeClipDownload === "function") {
-    const allowed = await window.authorizeClipDownload(clip, 1);
-    if (!allowed) return;
-  }
-
+  // Exporta primeiro: se a renderização falhar, nada é cobrado.
   const result = await exportVerticalCut({
     startOverride: clip.start,
     endOverride: clip.end,
@@ -1348,6 +1340,11 @@ async function exportAndDownloadClip(clip) {
   });
   if (!result || !result.url) return;
 
+  // Desconto acontece somente quando o arquivo ficou pronto (download real).
+  if (typeof window.authorizeClipDownload === "function") {
+    const allowed = await window.authorizeClipDownload(clip, 1);
+    if (!allowed) return;
+  }
   triggerBlobDownload(result.url, result.fileName);
   setTimeout(() => URL.revokeObjectURL(result.url), 120000);
 }
@@ -1424,14 +1421,10 @@ function renderClipList() {
 
   if ($("downloadAllLocalBtn")) {
     $("downloadAllLocalBtn").style.display = "inline-flex";
-    $("downloadAllLocalBtn").textContent = `⬇ Baixar todos os clipes (${state.clips.length})`;
+    $("downloadAllLocalBtn").textContent = "⬇ Baixar todos os clipes";
     $("downloadAllLocalBtn").onclick = async () => {
       if (!state.clips.length) return;
       for (const c of state.clips) {
-        if (typeof window.authorizeClipDownload === "function") {
-          const ok = await window.authorizeClipDownload(c, 1);
-          if (!ok) break;
-        }
         const result = await exportVerticalCut({
           startOverride: c.start,
           endOverride: c.end,
@@ -1439,6 +1432,10 @@ function renderClipList() {
           fileName: `clipfactory_corte_${c.idx}`
         });
         if (!result || !result.url) continue;
+        if (typeof window.authorizeClipDownload === "function") {
+          const ok = await window.authorizeClipDownload(c, 1);
+          if (!ok) break;
+        }
         triggerBlobDownload(result.url, result.fileName);
         setTimeout(() => URL.revokeObjectURL(result.url), 120000);
       }
@@ -1498,6 +1495,7 @@ function exportSrt() {
   a.click();
 }
 
+
 async function generateAutomaticCaptionsFromAudio() {
   const statusEl = $("autoCaptionStatus");
   const videoEl = $("videoEl");
@@ -1540,7 +1538,7 @@ async function generateAutomaticCaptionsFromAudio() {
   state.captions = generated;
   renderCaptionList();
   if (statusEl) {
-    statusEl.textContent = `✅ ${generated.length} legendas automáticas geradas (${fmt(startSec)} → ${fmt(endSec)}). Edite o texto se desejar.`;
+    statusEl.textContent = `✅ ${generated.length} legendas automáticas geradas (${fmt(startSec)} → ${fmt(endSec)}). Edite o texto ou o tempo se quiser.`;
   }
 }
 
@@ -1548,7 +1546,7 @@ function startBrowserSpeechCaptioning() {
   const statusEl = $("autoCaptionStatus");
   const SpeechRec = window.SpeechRecognition || window.webkitSpeechRecognition;
   if (!SpeechRec) {
-    if (statusEl) statusEl.textContent = "Reconhecimento de voz não suportado neste navegador.";
+    if (statusEl) statusEl.textContent = "Reconhecimento de voz não suportado neste navegador; use 'Gerar legendas automáticas'.";
     return;
   }
   try {
@@ -1567,7 +1565,7 @@ function startBrowserSpeechCaptioning() {
       }
     };
     rec.onerror = (ev) => {
-      if (statusEl) statusEl.textContent = `Aviso de voz (${ev.error || "microfone"}).`;
+      if (statusEl) statusEl.textContent = `Aviso de voz (${ev.error || "microfone"}): use 'Gerar legendas automáticas'.`;
     };
     rec.start();
   } catch (e) {
@@ -1588,6 +1586,51 @@ function initCaptions() {
 
   if ($("autoGenCaptionsBtn")) $("autoGenCaptionsBtn").onclick = generateAutomaticCaptionsFromAudio;
   if ($("autoVoiceCaptionsBtn")) $("autoVoiceCaptionsBtn").onclick = startBrowserSpeechCaptioning;
+
+  if ($("whisperBtn")) {
+    $("whisperBtn").onclick = async () => {
+      const key = $("whisperKey").value.trim();
+      if (!key) {
+        alert("Informe uma chave da OpenAI ou adicione legendas manuais.");
+        return;
+      }
+      if (!state.file) {
+        alert("Envie um vídeo primeiro.");
+        return;
+      }
+      $("whisperBtn").disabled = true;
+      $("whisperBtn").textContent = "⏳...";
+      try {
+        const fd = new FormData();
+        fd.append("file", state.file, state.file.name);
+        fd.append("model", "whisper-1");
+        fd.append("response_format", "verbose_json");
+        const res = await fetch("https://api.openai.com/v1/audio/transcriptions", {
+          method: "POST",
+          headers: { Authorization: `Bearer ${key}` },
+          body: fd
+        });
+        if (!res.ok) throw new Error("Falha na transcrição (" + res.status + ")");
+        const data = await res.json();
+        if (Array.isArray(data.segments) && data.segments.length) {
+          state.captions = data.segments.map(seg => ({
+            start: Number(seg.start || 0),
+            end: Number(seg.end || (Number(seg.start || 0) + 3)),
+            text: String(seg.text || "").trim()
+          })).filter(c => c.text);
+          renderCaptionList();
+        } else if (data.text) {
+          state.captions = [{ start: 0, end: 5, text: data.text.trim() }];
+          renderCaptionList();
+        }
+      } catch (e) {
+        alert("Erro ao transcrever: " + e.message);
+      } finally {
+        $("whisperBtn").disabled = false;
+        $("whisperBtn").textContent = "🪄 Transcrever";
+      }
+    };
+  }
 }
 
 function drawAspectFillCrop(ctx, videoEl, crop, dx, dy, dw, dh) {
@@ -1619,31 +1662,6 @@ function drawAspectFillCrop(ctx, videoEl, crop, dx, dy, dw, dh) {
   ctx.rect(dx, dy, dw, dh);
   ctx.clip();
   ctx.drawImage(videoEl, sx, sy, sw, sh, dx, dy, dw, dh);
-  ctx.restore();
-}
-
-function drawRippedBox(ctx, x, y, w, h, fill, border) {
-  ctx.save();
-  const teeth = 26;
-  const step = w / teeth;
-  if (border) {
-    ctx.fillStyle = border;
-    ctx.beginPath();
-    ctx.moveTo(x - 8, y - 8);
-    for (let i = 0; i <= teeth; i++) ctx.lineTo(x + i * step, y - 8 + (((i * 13) % 7) - 3));
-    ctx.lineTo(x + w + 8, y + h + 8);
-    for (let i = teeth; i >= 0; i--) ctx.lineTo(x + i * step, y + h + 8 + (((i * 17) % 7) - 3));
-    ctx.closePath();
-    ctx.fill();
-  }
-  ctx.fillStyle = fill;
-  ctx.beginPath();
-  ctx.moveTo(x, y);
-  for (let i = 0; i <= teeth; i++) ctx.lineTo(x + i * step, y + (((i * 11) % 6) - 3));
-  ctx.lineTo(x + w, y + h);
-  for (let i = teeth; i >= 0; i--) ctx.lineTo(x + i * step, y + h + (((i * 19) % 6) - 3));
-  ctx.closePath();
-  ctx.fill();
   ctx.restore();
 }
 
@@ -1680,33 +1698,21 @@ function drawStyledText(ctx, text, xNorm, yNorm, fontSize, styleObj, timeSec) {
 
   ctx.save();
   ctx.globalAlpha = alpha;
-  const cx = xNorm * W + offsetX;
-  const cy = yNorm * H + offsetY;
-  ctx.translate(cx, cy);
+  ctx.translate(xNorm * W + offsetX, yNorm * H + offsetY);
   ctx.scale(scaleX, scaleY);
   ctx.font = `900 ${fontSize}px '${styleObj.font}', system-ui, sans-serif`;
   ctx.textAlign = "center";
   ctx.textBaseline = "middle";
 
-  const hasLine2 = styleObj.line2 && styleObj.line2.trim().length > 0;
-  const line2Text = hasLine2 ? styleObj.line2.trim() : "";
-
-  const m1 = ctx.measureText(displayText);
-  const m2 = hasLine2 ? ctx.measureText(line2Text) : { width: 0 };
-  const maxW = Math.max(m1.width, m2.width);
-
+  const metrics = ctx.measureText(displayText);
   const padX = fontSize * 0.45;
   const padY = fontSize * 0.32;
-  const boxW = Math.min(W * 0.92, maxW + padX * 2);
-  const boxH = hasLine2 ? (fontSize * 2.2 + padY * 2) : (fontSize + padY * 2);
+  const boxW = Math.min(W * 0.92, metrics.width + padX * 2);
+  const boxH = fontSize + padY * 2;
 
-  if (styleObj.mode === "ripped") {
-    drawRippedBox(ctx, -boxW / 2, -boxH / 2, boxW, boxH, styleObj.bgColor || "#07140e", "#ffffff");
-  } else if (styleObj.bg === "highlight" || styleObj.bg === "box") {
+  if (styleObj.bg === "highlight" || styleObj.bg === "box") {
     ctx.fillStyle = styleObj.bgColor || "#07140e";
-    ctx.beginPath();
-    ctx.roundRect(-boxW / 2, -boxH / 2, boxW, boxH, 14);
-    ctx.fill();
+    ctx.fillRect(-boxW / 2, -boxH / 2, boxW, boxH);
   } else if (styleObj.bg === "bar") {
     ctx.fillStyle = styleObj.bgColor || "#000000";
     ctx.fillRect(-W * 0.5, -boxH / 2, W, boxH);
@@ -1716,67 +1722,22 @@ function drawStyledText(ctx, text, xNorm, yNorm, fontSize, styleObj, timeSec) {
   } else if (styleObj.bg === "gradient") {
     ctx.shadowColor = styleObj.bgColor || "#0f5132";
     ctx.shadowBlur = 12;
+    ctx.shadowOffsetX = 4;
+    ctx.shadowOffsetY = 4;
+  } else if (styleObj.bg === "shadow") {
+    ctx.shadowColor = styleObj.bgColor || "#000000";
+    ctx.shadowBlur = 8;
+    ctx.shadowOffsetY = 5;
   }
 
-  ctx.lineWidth = Math.max(4, fontSize * 0.12);
-  ctx.strokeStyle = "rgba(0,0,0,0.85)";
-
-  if (hasLine2) {
-    const y1 = -fontSize * 0.55;
-    const y2 = fontSize * 0.55;
-    ctx.strokeText(displayText, 0, y1);
-    ctx.fillStyle = styleObj.color || "#ffffff";
-    ctx.fillText(displayText, 0, y1);
-
-    ctx.strokeText(line2Text, 0, y2);
-    ctx.fillStyle = "#ffd166";
-    ctx.fillText(line2Text, 0, y2);
-  } else {
+  if (styleObj.bg === "outline" || styleObj.bg === "box" || styleObj.bg === "glow") {
+    ctx.lineWidth = Math.max(4, fontSize * 0.12);
+    ctx.strokeStyle = styleObj.bg === "outline" ? (styleObj.bgColor || "#000000") : "rgba(0,0,0,0.65)";
     ctx.strokeText(displayText, 0, 0);
-    ctx.fillStyle = styleObj.color || "#ffffff";
-    ctx.fillText(displayText, 0, 0);
   }
 
-  ctx.restore();
-}
-
-function drawSocialBar(ctx, timeSec) {
-  if (!state.social.enabled) return;
-  const W = ctx.canvas.width;
-  const H = ctx.canvas.height;
-  const y = state.social.y * H;
-  const handle = state.social.handle || "@CapudoOficial";
-  const style = state.social.style;
-  const h = 86;
-
-  ctx.save();
-  if (style === "metal-red") {
-    const g = ctx.createLinearGradient(0, y - h/2, 0, y + h/2);
-    g.addColorStop(0, "#E11D48"); g.addColorStop(0.5, "#4C0519"); g.addColorStop(1, "#E11D48");
-    ctx.fillStyle = g;
-    ctx.fillRect(0, y - h/2, W, h);
-  } else if (style === "metal-gold") {
-    const g = ctx.createLinearGradient(0, y - h/2, 0, y + h/2);
-    g.addColorStop(0, "#FFE600"); g.addColorStop(0.5, "#78350F"); g.addColorStop(1, "#FFE600");
-    ctx.fillStyle = g;
-    ctx.fillRect(0, y - h/2, W, h);
-  } else if (style === "dark-neon") {
-    ctx.fillStyle = "rgba(7,12,10,0.9)";
-    ctx.fillRect(0, y - h/2, W, h);
-    ctx.strokeStyle = "#4ade80"; ctx.lineWidth = 4;
-    ctx.strokeRect(0, y - h/2, W, h);
-  } else {
-    ctx.fillStyle = "#E11D48";
-    ctx.beginPath(); ctx.roundRect(180, y - h/2, W - 360, h, 43); ctx.fill();
-  }
-
-  ctx.font = "italic 900 44px system-ui, sans-serif";
-  ctx.textAlign = "center";
-  ctx.textBaseline = "middle";
-  ctx.lineWidth = 6; ctx.strokeStyle = "#000";
-  ctx.strokeText("▶ " + handle, W / 2, y + 2);
-  ctx.fillStyle = "#FFFFFF";
-  ctx.fillText("▶ " + handle, W / 2, y + 2);
+  ctx.fillStyle = styleObj.color || "#ffffff";
+  ctx.fillText(displayText, 0, 0);
   ctx.restore();
 }
 
@@ -1829,15 +1790,10 @@ function drawFrameToCanvas(videoEl, canvas, nowSec, showSplitGuide = false) {
     }
   }
 
-  // Desenha Barrinha Social
-  drawSocialBar(ctx, nowSec);
-
-  // Desenha Gancho Visual
   if (state.hook.enabled && state.hook.text && state.hook.text.trim()) {
     drawStyledText(ctx, state.hook.text, state.hook.x, state.hook.y, +($("hookSz")?.value) || 64, state.hook, nowSec);
   }
 
-  // Desenha Legendas
   const activeCue = getActiveCaption(videoEl.currentTime || 0);
   if (activeCue && activeCue.text && activeCue.text.trim()) {
     drawStyledText(ctx, activeCue.text, state.capStyle.x, state.capStyle.y, +($("fontSz")?.value) || 48, state.capStyle, nowSec);
@@ -1862,14 +1818,8 @@ function startPreviewLoop() {
 
     const dHook = Math.hypot(nx - state.hook.x, ny - state.hook.y);
     const dCap = Math.hypot(nx - state.capStyle.x, ny - state.capStyle.y);
-    const dSoc = Math.abs(ny - state.social.y);
-
-    if (dHook < 0.14 || dCap < 0.14 || dSoc < 0.08) {
-      if (dSoc < 0.08 && dSoc < dHook && dSoc < dCap) {
-        state.draggingOverlay = "social";
-      } else {
-        state.draggingOverlay = dHook <= dCap ? "hook" : "cap";
-      }
+    if (dHook < 0.14 || dCap < 0.14) {
+      state.draggingOverlay = dHook <= dCap ? "hook" : "cap";
       canvas.setPointerCapture(e.pointerId);
     } else if (state.layout === "split") {
       state.draggingOverlay = "splitPreview";
@@ -1889,9 +1839,6 @@ function startPreviewLoop() {
     } else if (state.draggingOverlay === "hook") {
       state.hook.x = nx;
       state.hook.y = ny;
-    } else if (state.draggingOverlay === "social") {
-      state.social.y = ny;
-      if ($("socialY")) $("socialY").value = Math.round(ny * 100);
     } else {
       state.capStyle.x = nx;
       state.capStyle.y = ny;
@@ -1958,7 +1905,7 @@ async function exportVerticalCut(opts = {}) {
   if (btn) btn.disabled = true;
   state.isExporting = true;
   if ($("expResult")) $("expResult").innerHTML = "";
-  setExportLog(`Preparando exportação (${spec.w}×${spec.h} · ${spec.fps} fps)...`, 8);
+    setExportLog(`Preparando exportação (${spec.w}×${spec.h} · ${spec.fps} fps)...`, 8);
 
   let videoStream = null;
   let audioCtx = null;
@@ -1998,6 +1945,11 @@ async function exportVerticalCut(opts = {}) {
 
     combinedStream = new MediaStream(tracks);
 
+    // Gravar sempre em WebM: o remux com ts-ebml (fixWebmBlobDuration) regrava
+    // Duration + Cues + SeekHead e o arquivo abre completo em qualquer editor.
+    // NÃO usar video/mp4 do MediaRecorder: o Chrome grava MP4 fragmentado (fMP4),
+    // que players tocam inteiro mas editores (CapCut, InShot, Kinemaster) leem
+    // só o primeiro fragmento — aparece 6-7s de um clipe de 30s.
     const candidateMimeTypes = [
       "video/webm;codecs=vp9,opus",
       "video/webm;codecs=vp8,opus",
@@ -2107,6 +2059,9 @@ async function exportVerticalCut(opts = {}) {
       }
 
       videoEl.addEventListener("ended", finish, { once: true });
+      // Folga generosa: se o vídeo renderiza mais lento que tempo real (canvas
+      // pesado), o gravador continua até atingir o fim do trecho em vez de
+      // terminar no meio e cortar o vídeo.
       setTimeout(finish, Math.ceil((actualDurationSec * 2 + 6) * 1000));
     });
 
@@ -2159,6 +2114,8 @@ async function exportVerticalCut(opts = {}) {
         </div>`;
     }
 
+    // Com autoDownload === false, devolve o blob pronto para o chamador cobrar
+    // a cota/credits ANTES de entregar o arquivo (desconto garantido no download).
     if (opts.autoDownload === false) {
       return { blob: finalBlob, url, fileName: outName, durationSec: actualDurationSec };
     }

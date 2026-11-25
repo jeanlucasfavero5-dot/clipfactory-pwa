@@ -12,14 +12,17 @@ const upload = multer({
 const supabaseUrl = process.env.SUPABASE_URL;
 const supabaseServiceKey = process.env.SUPABASE_SERVICE_ROLE_KEY;
 
-const supabase = (supabaseUrl && supabaseServiceKey)
-  ? createClient(supabaseUrl, supabaseServiceKey)
-  : null;
+const supabase =
+  supabaseUrl && supabaseServiceKey
+    ? createClient(supabaseUrl, supabaseServiceKey)
+    : null;
 
-app.use(cors({
-  origin: process.env.ALLOWED_ORIGIN || "*",
-  methods: ["GET", "POST", "OPTIONS"]
-}));
+app.use(
+  cors({
+    origin: process.env.ALLOWED_ORIGIN || "*",
+    methods: ["GET", "POST", "OPTIONS"]
+  })
+);
 app.use(express.json());
 
 function isMp4File(file) {
@@ -135,12 +138,12 @@ async function ensureValidConnection(conn) {
 async function publishToYouTube(conn, file, meta) {
   const active = await ensureValidConnection(conn);
 
-  if (!process.env.ENABLE_LIVE_SOCIAL_PUBLISH) {
+  if (process.env.ENABLE_LIVE_SOCIAL_PUBLISH !== "true") {
     return {
       provider: "youtube",
       status: "ready_or_simulated",
       account: active.conta_nome || null,
-      detail: "Validação OK (ative ENABLE_LIVE_SOCIAL_PUBLISH='true' após configurar credenciais OAuth do YouTube)"
+      detail: "Validação OK (defina ENABLE_LIVE_SOCIAL_PUBLISH='true' após configurar credenciais OAuth)"
     };
   }
 
@@ -203,12 +206,12 @@ async function publishToYouTube(conn, file, meta) {
 async function publishToTikTok(conn, file, meta) {
   const active = await ensureValidConnection(conn);
 
-  if (!process.env.ENABLE_LIVE_SOCIAL_PUBLISH) {
+  if (process.env.ENABLE_LIVE_SOCIAL_PUBLISH !== "true") {
     return {
       provider: "tiktok",
       status: "ready_or_simulated",
       account: active.conta_nome || null,
-      detail: "Validação OK (ative ENABLE_LIVE_SOCIAL_PUBLISH='true' após configurar credenciais do TikTok)"
+      detail: "Validação OK (defina ENABLE_LIVE_SOCIAL_PUBLISH='true' após configurar credenciais OAuth)"
     };
   }
 
@@ -242,9 +245,7 @@ async function publishToTikTok(conn, file, meta) {
   const publishId = initData?.data?.publish_id;
 
   if (!initResp.ok || !uploadUrl) {
-    throw new Error(
-      `TikTok init falhou: ${initData?.error?.message || `HTTP ${initResp.status}`}`
-    );
+    throw new Error(`TikTok init falhou: ${initData?.error?.message || `HTTP ${initResp.status}`}`);
   }
 
   const putResp = await fetch(uploadUrl, {
@@ -272,12 +273,12 @@ async function publishToTikTok(conn, file, meta) {
 async function publishToInstagram(conn, file, meta) {
   const active = await ensureValidConnection(conn);
 
-  if (!process.env.ENABLE_LIVE_SOCIAL_PUBLISH) {
+  if (process.env.ENABLE_LIVE_SOCIAL_PUBLISH !== "true") {
     return {
       provider: "instagram",
       status: "ready_or_simulated",
       account: active.conta_nome || null,
-      detail: "Validação OK (ative ENABLE_LIVE_SOCIAL_PUBLISH='true' após configurar Meta Graph API)"
+      detail: "Validação OK (defina ENABLE_LIVE_SOCIAL_PUBLISH='true' após configurar Meta Graph API)"
     };
   }
 
@@ -331,12 +332,12 @@ async function publishToInstagram(conn, file, meta) {
 async function publishToFacebook(conn, file, meta) {
   const active = await ensureValidConnection(conn);
 
-  if (!process.env.ENABLE_LIVE_SOCIAL_PUBLISH) {
+  if (process.env.ENABLE_LIVE_SOCIAL_PUBLISH !== "true") {
     return {
       provider: "facebook",
       status: "ready_or_simulated",
       account: active.conta_nome || null,
-      detail: "Validação OK (ative ENABLE_LIVE_SOCIAL_PUBLISH='true' após configurar Meta Graph API)"
+      detail: "Validação OK (defina ENABLE_LIVE_SOCIAL_PUBLISH='true' após configurar Meta Graph API)"
     };
   }
 

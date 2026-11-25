@@ -88,9 +88,6 @@ function setExportLog(msg, pct = null) {
   }
 }
 
-/* ============================================================
-   Patch EBML / WebM: regrava Duration + Cues + SeekHead (remux via ts-ebml)
-   ============================================================ */
 function fixWebmBlobDurationFallback(blob, durationSec) {
   return blob.arrayBuffer().then((buf) => {
     const bytes = new Uint8Array(buf);
@@ -188,15 +185,11 @@ function fixWebmBlobDuration(blob, durationSec) {
       }
       return new Blob(parts, { type: blob.type || "video/webm" });
     } catch (e) {
-      console.warn("Remux ts-ebml falhou, usando fallback de bytes:", e);
       return fixWebmBlobDurationFallback(blob, durationSec);
     }
   }).catch(() => blob);
 }
 
-/* ============================================================
-   RIFF / AVI MJPEG container builder from captured JPEG frames
-   ============================================================ */
 function buildAviFromJpegFrames(frames, width, height, fps) {
   const safeFps = Math.max(1, Math.min(60, Number(fps) || 30));
   const useSecPerFrame = Math.round(1000000 / safeFps);
@@ -310,9 +303,6 @@ function buildAviFromJpegFrames(frames, width, height, fps) {
   return new Blob([out], { type: "video/avi" });
 }
 
-/* ============================================================
-   Capture thumbnail data URL at a specific timestamp
-   ============================================================ */
 async function captureThumbnailAt(timeSec) {
   const videoEl = $("videoEl");
   if (!videoEl || !videoEl.src) return null;
@@ -802,28 +792,87 @@ function initSourceAndHookEnhancements() {
       return false;
     }
 
+    const isPlatformPage = /(youtube\.com|youtu\.be|twitch\.tv|tiktok\.com|kwai\.com|instagram\.com|facebook\.com|fb\.watch)/i.test(parsed.hostname);
     const baseName = (parsed.pathname && parsed.pathname !== "/" ? parsed.pathname.split("/").pop() : "") || "clipfactory-video";
     const fname = /\.(mp4|webm|mov|mkv|m3u8)$/i.test(baseName) ? baseName : (baseName + ".mp4");
 
-    try {
-      setLinkStatusMessage("Baixando vídeo para a pasta Downloads do dispositivo...", "ok");
-      const resp = await fetch(targetUrl);
-      if (!resp.ok) throw new Error("HTTP " + resp.status);
-      const blob = await resp.blob();
-      const bUrl = URL.createObjectURL(blob);
-      triggerBlobDownload(bUrl, fname);
-      setTimeout(() => URL.revokeObjectURL(bUrl), 120000);
-      setLinkStatusMessage("Vídeo enviado para a pasta Downloads do dispositivo!", "ok");
-    } catch (_) {
-      triggerBlobDownload(targetUrl, fname);
-      setLinkStatusMessage("Solicitação de download enviada para o navegador (pasta Downloads).", "ok");
+    const apiBase = (typeof window.HUB !== "undefined" && window.HUB.apiBase)
+      ? String(window.HUB.apiBase).replace(/\/+$/, "")
+      : "";
+
+    let downloadedBlob = null;
+    let resolvedFileName = fname;
+
+    if (apiBase) {
+      try {
+        setLinkStatusMessage("Extraindo e baixando vídeo via API ClipFactory...", "ok");
+        const params = new URLSearchParams({
+          url: targetUrl,
+          start_sec: String(Math.round(rangeCfg.startSec)),
+          end_sec: String(Math.round(rangeCfg.endSec)),
+          full_if_shorter: String(!!rangeCfg.fullIfShorter)
+        });
+        const apiResp = await fetch(`${apiBase}/api/download?${params.toString()}`);
+        if (!apiResp.ok) {
+          let detail = "HTTP " + apiResp.status;
+          try {
+            const errJson = await apiResp.json();
+            if (errJson?.detail) detail = errJson.detail;
+          } catch (_) {}
+          throw new Error(detail);
+        }
+        const disp = apiResp.headers.get("content-disposition") || "";
+        const matchName = disp.match(/filename="?([^";]+)"?/i);
+        if (matchName && matchName[1]) {
+          resolvedFileName = matchName[1];
+        }
+        downloadedBlob = await apiResp.blob();
+      } catch (apiErr) {
+        if (isPlatformPage) {
+          setLinkStatusMessage("Falha na API ao baixar link da plataforma: " + apiErr.message, "err");
+          return false;
+        }
+      }
     }
 
+    if (!downloadedBlob && !isPlatformPage) {
+      try {
+        setLinkStatusMessage("Baixando vídeo para a pasta Downloads do dispositivo...", "ok");
+        const resp = await fetch(targetUrl);
+        if (!resp.ok) throw new Error("HTTP " + resp.status);
+        downloadedBlob = await resp.blob();
+      } catch (_) {
+        downloadedBlob = null;
+      }
+    }
+
+    if (downloadedBlob && downloadedBlob.size > 0) {
+      const bUrl = URL.createObjectURL(downloadedBlob);
+      triggerBlobDownload(bUrl, resolvedFileName);
+      setTimeout(() => URL.revokeObjectURL(bUrl), 120000);
+      setLinkStatusMessage("Vídeo baixado para a pasta Downloads (" + resolvedFileName + ").", "ok");
+
+      if (alsoOpenEditor) {
+        const localFile = new File([downloadedBlob], resolvedFileName, { type: downloadedBlob.type || "video/mp4" });
+        loadVideoFile(localFile);
+        applyRangeToEditor(rangeCfg.startSec, rangeCfg.endSec, rangeCfg.fullIfShorter);
+      }
+      return true;
+    }
+
+    if (isPlatformPage) {
+      setLinkStatusMessage(
+        "Links do YouTube/plataformas exigem a API Python (yt-dlp + ffmpeg) rodando em HUB.apiBase para baixar o arquivo direto sem abrir o site.",
+        "err"
+      );
+      return false;
+    }
+
+    triggerBlobDownload(targetUrl, fname);
+    setLinkStatusMessage("Solicitação de download enviada para o navegador.", "ok");
     if (alsoOpenEditor) {
       await loadVideoFromUrl(targetUrl);
       applyRangeToEditor(rangeCfg.startSec, rangeCfg.endSec, rangeCfg.fullIfShorter);
-      if ($("step1")) $("step1").classList.add("hidden");
-      if ($("editor")) $("editor").classList.remove("hidden");
     }
     return true;
   };
@@ -1137,7 +1186,6 @@ function renderHeatmap(scores) {
   });
 }
 
-/* Regra solicitada: Se pedir 5 vídeos gera APENAS 5, se pedir 10 gera APENAS 10, se pedir melhores momentos gera APENAS 10 */
 async function analyzeMoments() {
   const videoEl = $("videoEl");
   if ((!state.file && !state.videoUrl) || !videoEl || !videoEl.src) {
@@ -1357,7 +1405,6 @@ function getSelectedExportFormatInfo() {
   return { mode, tierKey, isAvi, fps, ext };
 }
 
-/* Regra corrigida: Autorização e desconto obrigatórios ao baixar individualmente ou em lote */
 async function exportAndDownloadClip(clip) {
   if (typeof window.authorizeClipDownload === "function") {
     const allowed = await window.authorizeClipDownload(clip, 1);

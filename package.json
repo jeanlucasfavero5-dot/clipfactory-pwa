@@ -1,6 +1,6 @@
 {
   "name": "clipfactory-api",
-  "version": "0.031",
+  "version": "1.0.0",
   "type": "module",
   "main": "server.js",
   "scripts": {

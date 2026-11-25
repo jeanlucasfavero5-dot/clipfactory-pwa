@@ -66,6 +66,7 @@ const CAP_PRESETS = [
   { name: "Modo Turbo", font: "Anton", color: "#4ade80", bg: "gradient", bgColor: "#030705", anim: "zoomout" }
 ];
 
+// Presets adicionais de gancho estilo 2 linhas / papel rasgado / caixas 3D
 const HOOK_PRESETS = CAP_PRESETS.map((p, i) => ({
   ...p,
   name: `Gancho ${i + 1} · ${p.name}`

@@ -340,7 +340,7 @@ a.dl{display:inline-block;margin-top:10px;background:linear-gradient(135deg,var(
           <button type="button" class="ghost small" id="downloadSourceVideoBtn">⬇ Baixar vídeo</button>
         </div>
       </div>
-      <div id="step1UrlStatus" class="link-note" style="margin-top:12px;text-align:left">Escolha entre <b>Envio local</b>, <b>Editar com link / live</b> ou <b>Baixar vídeo (até 30m)</b>. Para links externos de YouTube/Twitch/lives protegidas no navegador ou PWA, o sistema tenta extração/proxy automático e, se a plataforma bloquear CORS/DRM, orienta o fluxo compatível sem travar.</div>
+      <div id="step1UrlStatus" class="link-note" style="margin-top:12px;text-align:left">Escolha entre <b>Envio local</b>, <b>Editar com link / live</b> ou <b>Baixar vídeo (até 30m)</b>.</div>
     </div>
   </section>
 
@@ -394,7 +394,7 @@ a.dl{display:inline-block;margin-top:10px;background:linear-gradient(135deg,var(
         <div class="card-h"><h2>3. Melhores momentos (heurístico)</h2><button class="collapse-btn">▾</button></div>
         <div class="card-body">
           <div id="clipList"><p class="signal">Clique em <b>Analisar melhores momentos</b> para gerar sugestões de corte com nota.</p></div>
-          <div class="row" style="margin-top:8px"><button class="ghost small" id="downloadAllLocalBtn" style="display:none">⬇ Baixar todos (cobra o plano escolhido 1×)</button></div>
+          <div class="row" style="margin-top:8px"><button class="ghost small" id="downloadAllLocalBtn" style="display:none">⬇ Baixar todos os clipes</button></div>
           <div class="formula">
             <b>Como a nota é calculada</b> (0–100, janela deslizante de cortes):<br>
             <code>Nota = 50×PicoDeÁudio + 30×Movimento/CortesDeCena + 20×Intensidade</code>
@@ -410,7 +410,7 @@ a.dl{display:inline-block;margin-top:10px;background:linear-gradient(135deg,var(
           <div id="previewWrap">
             <canvas id="previewCanvas" width="1080" height="1920"></canvas>
           </div>
-          <p class="signal" style="text-align:center">Arraste na prévia para mover <b style="color:var(--warn)">divisória</b>, <b style="color:var(--warn)">gancho</b> e <b style="color:var(--acc2)">legenda</b>.</p>
+          <p class="signal" style="text-align:center">Arraste na prévia para mover <b style="color:var(--warn)">divisória</b>, <b style="color:var(--warn)">gancho</b>, <b style="color:var(--acc2)">barrinha social</b> e <b style="color:var(--acc2)">legenda</b>.</p>
           <div class="row" style="width:100%">
             <div><label>Tamanho da LEGENDA</label><input type="range" id="fontSz" min="24" max="140" value="48"></div>
             <div><label>Tamanho do GANCHO</label><input type="range" id="hookSz" min="28" max="200" value="64"></div>
@@ -418,8 +418,49 @@ a.dl{display:inline-block;margin-top:10px;background:linear-gradient(135deg,var(
         </div>
       </div>
 
+      <!-- PAINEL SOCIAL E @ -->
+      <div class="card" id="cardSocial">
+        <div class="card-h"><h2>5. Barrinha Social & @ Personalizado</h2><button class="collapse-btn">▾</button></div>
+        <div class="card-body">
+          <label class="chk-inline">
+            <input type="checkbox" id="socialToggle" checked> Ativar Barrinha Social
+          </label>
+          <div class="row" style="margin-top:8px">
+            <div>
+              <label>Rede Social</label>
+              <select id="socialNet">
+                <option value="youtube">YouTube</option>
+                <option value="instagram">Instagram</option>
+                <option value="tiktok">TikTok</option>
+                <option value="kwai">Kwai</option>
+                <option value="twitch">Twitch</option>
+              </select>
+            </div>
+            <div>
+              <label>Seu @ ou Nome</label>
+              <input type="text" id="socialHandle" value="@CapudoOficial">
+            </div>
+          </div>
+          <div class="row" style="margin-top:8px">
+            <div>
+              <label>Estilo da Barra</label>
+              <select id="socialStyle">
+                <option value="metal-red">Metálica Vermelha 3D</option>
+                <option value="metal-gold">Metálica Dourada 3D</option>
+                <option value="dark-neon">Escura + Neon Verde</option>
+                <option value="pill">Pílula Sólida</option>
+              </select>
+            </div>
+            <div>
+              <label>Posição Altura Y (%)</label>
+              <input type="range" id="socialY" min="5" max="95" value="52">
+            </div>
+          </div>
+        </div>
+      </div>
+
       <div class="card" id="cardCap">
-        <div class="card-h"><h2>5. Legenda (50+ presets)</h2><button class="collapse-btn">▾</button></div>
+        <div class="card-h"><h2>6. Legenda (50+ presets)</h2><button class="collapse-btn">▾</button></div>
         <div class="card-body">
           <label>Presets de estilo (fonte + cor + fundo + animação)</label>
           <div class="presetGrid" id="capPresets"></div>
@@ -460,17 +501,13 @@ a.dl{display:inline-block;margin-top:10px;background:linear-gradient(135deg,var(
           <div class="card" id="autoCaptionCard" style="margin-top:10px;background:rgba(74,222,128,0.06);border-color:rgba(74,222,128,0.28)">
             <div class="card-h"><h2>⚡ Legenda automática (sem chave API)</h2><button type="button" class="collapse-btn">▾</button></div>
             <div class="card-body">
-              <p class="signal">Gera legendas automaticamente divididas por trechos ativos de fala/áudio do vídeo, com opção de reconhecimento de voz do navegador (sem depender de chave OpenAI).</p>
+              <p class="signal">Gera legendas automaticamente divididas por trechos ativos de fala/áudio do vídeo.</p>
               <div class="row" style="gap:6px;flex-wrap:wrap">
                 <button type="button" class="small" id="autoGenCaptionsBtn" style="flex:1">⚡ Gerar legendas automáticas</button>
                 <button type="button" class="ghost small" id="autoVoiceCaptionsBtn" style="flex:1">🎙 Capturar fala (microfone)</button>
               </div>
               <div id="autoCaptionStatus" class="signal" style="margin-top:6px">Pronto para gerar legendas automáticas.</div>
             </div>
-          </div>
-          <div class="row" style="margin-top:8px">
-            <input type="password" id="whisperKey" placeholder="Chave OpenAI (opcional — legenda automática)">
-            <button class="ghost" id="whisperBtn" style="flex:0 0 auto">🪄 Transcrever</button>
           </div>
           <div class="row" style="margin-top:6px">
             <button class="ghost small" id="addCapBtn">＋ Legenda no tempo atual</button>
@@ -481,12 +518,21 @@ a.dl{display:inline-block;margin-top:10px;background:linear-gradient(135deg,var(
       </div>
 
       <div class="card" id="cardHook">
-        <div class="card-h"><h2>6. Gancho visual (50+ presets)</h2><button class="collapse-btn">▾</button></div>
+        <div class="card-h"><h2>7. Gancho visual & Título 3D (50+ presets)</h2><button class="collapse-btn">▾</button></div>
         <div class="card-body">
-          <label>Texto do gancho (aparece no vídeo)</label>
+          <label>Texto do gancho (Linha 1)</label>
           <input type="text" id="hookText" placeholder="ex.: ESSA JOGADA É IRREAL! 😱">
+          <label>Texto do gancho (Linha 2 - Opcional)</label>
+          <input type="text" id="hookLine2Text" placeholder="ex.: VIRADA ABSURDA NO FINAL">
           <label>Presets de estilo (fonte + cor + fundo + animação)</label>
           <div class="presetGrid" id="hookPresets"></div>
+          <label>Estilo do Fundo do Gancho</label>
+          <select id="hookBgMode">
+            <option value="box">Caixa Sólida Arredondada</option>
+            <option value="ripped">Papel Rasgado / Estilo Estúdio</option>
+            <option value="outline">Apenas Contorno Neon</option>
+            <option value="bar">Faixa Transversal</option>
+          </select>
           <label>Fonte</label>
           <select id="hookFont">
             <option value="Bebas Neue">Bebas Neue</option><option value="Anton">Anton</option>
@@ -495,20 +541,13 @@ a.dl{display:inline-block;margin-top:10px;background:linear-gradient(135deg,var(
             <option value="Righteous">Righteous</option><option value="Oswald">Oswald</option>
             <option value="Montserrat">Montserrat</option><option value="Poppins">Poppins</option>
           </select>
-          <label>Cor</label>
+          <label>Cor do Texto</label>
           <div class="swatches" id="hookColorSwatches"></div>
           <div class="row" style="margin-top:6px;align-items:center">
             <span style="font-size:11px;color:var(--muted);flex:0 0 auto">Cor livre:</span>
             <input type="color" id="hookCustomColor" value="#ffd166" style="width:54px;height:32px;padding:2px;flex:0 0 auto;cursor:pointer">
           </div>
-          <label>Fundo / efeito</label>
-          <select id="hookBg">
-            <option value="outline">Contorno</option><option value="highlight">Destaque sólido</option>
-            <option value="bar">Barra</option><option value="box">Caixa</option>
-            <option value="glow">Brilho neon</option><option value="gradient">Gradiente/sombra dupla</option>
-            <option value="shadow">Sombra</option>
-          </select>
-          <label>Cor do fundo / traço</label>
+          <label>Cor do Fundo / Traço</label>
           <div class="swatches" id="hookBgSwatches"></div>
           <div class="row" style="margin-top:6px;align-items:center">
             <span style="font-size:11px;color:var(--muted);flex:0 0 auto">Fundo livre:</span>
@@ -531,13 +570,12 @@ a.dl{display:inline-block;margin-top:10px;background:linear-gradient(135deg,var(
       </div>
 
       <div class="card" id="cardExport">
-        <div class="card-h"><h2>7. Exportar</h2><button class="collapse-btn">▾</button></div>
+        <div class="card-h"><h2>8. Exportar</h2><button class="collapse-btn">▾</button></div>
         <div class="card-body">
           <label>Formato</label>
           <select id="expMode">
             <option value="fast">WebM vertical — rápido, queima legenda + gancho (recomendado)</option>
             <option value="avi">AVI vertical (30 / 60 fps) — queima legenda + gancho</option>
-            <option value="mp4">MP4 vertical (H.264) via ffmpeg.wasm</option>
           </select>
           <label>Resolução e FPS</label>
           <select id="expTier">
@@ -545,7 +583,7 @@ a.dl{display:inline-block;margin-top:10px;background:linear-gradient(135deg,var(
             <option value="1080p60">1080 × 1920 · 60 fps</option>
             <option value="720p30">720 × 1280 · 30 fps</option>
             <option value="720p60">720 × 1280 · 60 fps</option>
-            <option value="1440p60">⭐ 1440 × 2560 (2K vertical) · 60 fps — só Premium</option>
+            <option value="1440p60">⭐ 1440 × 2560 (2K vertical) · 60 fps</option>
           </select>
           <button id="exportBtn" style="width:100%;margin-top:12px">⬇ Exportar corte vertical</button>
           <div id="expProg"><div id="expProgIn"></div></div>
@@ -558,7 +596,7 @@ a.dl{display:inline-block;margin-top:10px;background:linear-gradient(135deg,var(
 </main>
 
 <div class="footer">ClipFactory × WaveCombat Hub — <a style="color:var(--acc2)" href="https://youtube.com/@capudooficial7?si=awSkNhuT4YY177Yp" target="_blank" rel="noopener">inscreva-se no canal ↗</a></div>
-<div id="appVersion">v0.029</div>
+<div id="appVersion">v0.030</div>
 
 <script src="https://cdn.jsdelivr.net/npm/ts-ebml@3.0.2/dist/EBML.min.js"></script>
 <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
@@ -611,7 +649,7 @@ async function triggerRealUpdate(btnEl, statusFn) {
 <script src="./wallet.js"></script>
 <script>
 "use strict";
-const EDITOR_VERSION = "0.029";
+const EDITOR_VERSION = "0.030";
 document.getElementById("appVersion").textContent = "v" + EDITOR_VERSION;
 
 if ("serviceWorker" in navigator) {

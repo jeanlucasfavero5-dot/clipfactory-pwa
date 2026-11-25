@@ -87,3 +87,26 @@ const VIRAL_HASHTAGS = [
   "#fps #battleRoyale #live #capcut #fyp",
   "#jogada #proplayer #gaming #esports #viralizou"
 ];
+
+const EXTRA_HOOK_LINES = [
+  "ESSA JOGADA MUDOU O JOGO INTEIRO! 🔥",
+  "VOCÊ NÃO VAI ACREDITAR NO QUE ACONTECEU AQUI!",
+  "OLHA O NÍVEL DESSE CLUTCH NO FINAL! 😱",
+  "A LIVE INTEIRA FOI À LOUCURA NESSA HORA!",
+  "SE VOCÊ PISCOU, PERDEU O MELHOR MOMENTO!",
+  "ISSO AQUI É PURA ARTE EM 9:16! ⚡",
+  "COMO VIRAR UMA PARTIDA QUASE PERDIDA!",
+  "O ERRO QUE NINGUÉM VIU E CUSTOU TUDO!",
+  "RESPOSTA RÁPIDA QUE FECHOU O ROUND!",
+  "AQUELE MOMENTO QUE VALE O VÍDEO TODO!"
+];
+
+const ALL_HOOK_IDEAS = [...VIRAL_TITLES, ...EXTRA_HOOK_LINES];
+
+function pickRandomHookIdea() {
+  return ALL_HOOK_IDEAS[Math.floor(Math.random() * ALL_HOOK_IDEAS.length)];
+}
+
+function pickRandomHashtags() {
+  return VIRAL_HASHTAGS[Math.floor(Math.random() * VIRAL_HASHTAGS.length)];
+}

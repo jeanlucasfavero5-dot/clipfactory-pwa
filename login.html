@@ -33,8 +33,9 @@
 body{
   min-height:100vh;
   background:
-    linear-gradient(rgba(3, 7, 5, 0.72), rgba(3, 7, 5, 0.84)),
-    url("./splash-bg.jpg") center center / cover fixed no-repeat;
+    radial-gradient(820px 440px at 80% -10%, rgba(20,108,67,.30), transparent 60%),
+    radial-gradient(640px 400px at -10% 90%, rgba(15,81,50,.26), transparent 60%),
+    linear-gradient(180deg, var(--bg2), var(--bg));
   color:var(--txt);
   font-family:system-ui,-apple-system,"Segoe UI",Roboto,sans-serif;
   display:flex;
@@ -209,10 +210,9 @@ input:focus{
   border:1px solid var(--border);
   border-radius:12px;
   padding:11px 14px;
-  font-size:14px;
-  font-weight:800;
+  font-size:13px;
+  font-weight:700;
   cursor:pointer;
-  min-height:42px;
   transition:.15s;
 }
 .btn-secondary:hover{
@@ -261,7 +261,22 @@ input:focus{
   border-radius:99px;
   z-index:20;
 }
+
+#installPwaBtn {
+  font-size: 14px !important;
+  font-weight: 800 !important;
+  padding: 10px 14px !important;
+  min-height: 42px !important;
+}
+
 </style>
+
+<style id="cfBgOverride">
+  body {
+    background: linear-gradient(rgba(3, 7, 5, 0.72), rgba(3, 7, 5, 0.84)), url("./splash-bg.jpg") center center / cover fixed no-repeat !important;
+  }
+</style>
+
 </head>
 <body>
 
@@ -309,31 +324,70 @@ input:focus{
     </div>
 
     <button type="submit" class="btn-primary" id="loginSubmitBtn">Entrar no aplicativo</button>
-    <button type="button" class="btn-secondary" id="installPwaBtn">📲 Instalar aplicativo no celular</button>
+    <button type="button" class="btn-secondary" id="installPwaBtn">Instalar aplicativo no celular</button>
   </form>
 
   <div id="statusBox"></div>
 
   <div class="footer-links">
-    <a href="https://wavecombat-hub.onrender.com/#inicio" target="_blank" rel="noopener">Comprar Diamantes / Criar conta</a>
+    <a href="https://wavecombat-hub.onrender.com" target="_blank" rel="noopener">Criar conta / Diamantes</a>
     <a href="./editor.html">Abrir modo local</a>
   </div>
 </main>
 
-<div id="appVersion">v0.026</div>
+<div id="appVersion">v0.009</div>
 
-<script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
+<script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2">async function triggerRealUpdate(btnEl, statusFn) {
+  if (btnEl) {
+    btnEl.disabled = true;
+    btnEl.textContent = "Baixando e aplicando atualização…";
+  }
+  if (statusFn) statusFn("Baixando nova versão e limpando cache antigo…", "ok");
+  try {
+    if ("serviceWorker" in navigator) {
+      const regs = await navigator.serviceWorker.getRegistrations();
+      for (const r of regs) {
+        await r.update().catch(() => {});
+        if (r.waiting) r.waiting.postMessage({ type: "SKIP_WAITING" });
+      }
+    }
+    if ("caches" in window) {
+      const keys = await caches.keys();
+      await Promise.all(keys.map(k => caches.delete(k)));
+    }
+    // Prefetch core updated files so the new version is downloaded right away
+    const coreFiles = ["./index.html", "./login.html", "./editor.html", "./app.js", "./wallet.js", "./presets.js", "./manifest.json", "./version.json"];
+    await Promise.all(coreFiles.map(u => fetch(`${u}?_upd=${Date.now()}`, { cache: "no-store" }).catch(() => null)));
+  } catch (e) {}
+
+  // If version.json specifies a downloadable zip/package URL, start download too
+  if (window.__cfPackageUrl) {
+    const dl = document.createElement("a");
+    dl.href = window.__cfPackageUrl;
+    dl.download = window.__cfPackageUrl.split("/").pop() || "clipfactory-update.zip";
+    document.body.appendChild(dl);
+    dl.click();
+    dl.remove();
+  }
+
+  const target = (latestUpdateUrl || "./index.html");
+  const sep = target.includes("?") ? "&" : "?";
+  setTimeout(() => {
+    window.location.replace(`${target}${sep}v=0.011&t=${Date.now()}`);
+  }, 350);
+}
+</script>
 <script>
 "use strict";
 
-const APP_VERSION = "0.026";
+const APP_VERSION = "0.011";
 const VERSION_CHECK_URL = "./version.json";
 const SUPABASE_URL = "https://ipqjeacdfiomcxfuixdj.supabase.co";
 const SUPABASE_KEY = "sb_publishable_EWW84q_43YbOvMwB_Rua-A_X465PbLP";
 
 const $ = id => document.getElementById(id);
 let deferredInstallPrompt = null;
-let latestUpdateUrl = "./index.html";
+let latestUpdateUrl = null;
 
 $("appVersion").textContent = "v" + APP_VERSION;
 
@@ -390,8 +444,8 @@ async function checkForUpdates(showFeedbackIfUpToDate = false) {
     if (!res.ok) return;
     const data = await res.json();
     if (data && data.package_url) { window.__cfPackageUrl = data.package_url; }
-    if (data && isNewerVersion(data.version, APP_VERSION)) {
-      latestUpdateUrl = data.url || "./index.html";
+      if (data && isNewerVersion(data.version, APP_VERSION)) {
+      latestUpdateUrl = data.url || "./login.html";
       $("remoteVerLabel").textContent = `v${data.version}`;
       $("updateBanner").classList.add("show");
     } else {
@@ -407,32 +461,9 @@ async function checkForUpdates(showFeedbackIfUpToDate = false) {
   }
 }
 
-async function triggerRealUpdate(btnEl) {
-  if (btnEl) {
-    btnEl.disabled = true;
-    btnEl.textContent = "Baixando e aplicando atualização…";
-  }
-  setStatus("Limpando cache antigo e recarregando…", "ok");
-  try {
-    if ("serviceWorker" in navigator) {
-      const regs = await navigator.serviceWorker.getRegistrations();
-      for (const r of regs) {
-        await r.update().catch(() => {});
-        if (r.waiting) r.waiting.postMessage({ type: "SKIP_WAITING" });
-      }
-    }
-    if ("caches" in window) {
-      const keys = await caches.keys();
-      await Promise.all(keys.map(k => caches.delete(k)));
-    }
-  } catch (e) {}
-  setTimeout(() => {
-    window.location.replace(`${latestUpdateUrl}?v=${APP_VERSION}&t=${Date.now()}`);
-  }, 300);
-}
-
 $("checkUpdManualBtn").addEventListener("click", () => checkForUpdates(true));
-$("updateBtn").addEventListener("click", () => triggerRealUpdate($("updateBtn")));
+
+$("updateBtn").addEventListener("click", () => triggerRealUpdate($("updateBtn"), setStatus));
 
 window.addEventListener("beforeinstallprompt", e => {
   e.preventDefault();
@@ -556,5 +587,6 @@ window.addEventListener("DOMContentLoaded", () => {
   checkForUpdates(false);
 });
 </script>
+
 </body>
 </html>

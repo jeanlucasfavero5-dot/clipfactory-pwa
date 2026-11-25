@@ -5,6 +5,8 @@ const $ = id => document.getElementById(id);
 const state = {
   file: null,
   videoUrl: null,
+  sourceName: "",
+  sourceType: "file",
   duration: 0,
   cropCam: { x: 0.04, y: 0.05, w: 0.32, h: 0.28 },
   cropGame: { x: 0.08, y: 0.25, w: 0.84, h: 0.68 },
@@ -555,6 +557,209 @@ function loadVideoFile(file) {
   };
 }
 
+function attachVideoMetadataHandlers(videoEl, labelText) {
+  videoEl.preload = "auto";
+  videoEl.load();
+  const onMetaOrDur = () => {
+    applyLoadedDuration(videoEl);
+    updateCropBoxUI();
+    updateTimelineUI();
+  };
+  videoEl.onloadedmetadata = onMetaOrDur;
+  videoEl.ondurationchange = onMetaOrDur;
+  videoEl.onloadeddata = onMetaOrDur;
+  videoEl.ontimeupdate = () => {
+    if (!state.duration && videoEl.duration > 0) {
+      applyLoadedDuration(videoEl);
+    }
+    updateTimelineUI();
+  };
+  if ($("step1")) $("step1").classList.add("hidden");
+  if ($("editor")) $("editor").classList.remove("hidden");
+  if ($("exportStatus")) $("exportStatus").textContent = "Vídeo carregado: " + labelText;
+}
+
+function setLinkStatusMessage(msg, mode = "") {
+  const targets = [$("step1UrlStatus"), $("editorSourceStatus")];
+  targets.forEach(el => {
+    if (!el) return;
+    el.textContent = msg;
+    el.className = "link-note" + (mode ? " " + mode : "");
+  });
+}
+
+async function loadVideoFromUrl(rawUrl) {
+  const cleanUrl = String(rawUrl || "").trim();
+  if (!cleanUrl) {
+    setLinkStatusMessage("Informe um link válido (http:// ou https://) para carregar.", "err");
+    return false;
+  }
+  let parsed;
+  try {
+    parsed = new URL(cleanUrl);
+    if (!/^https?:$/i.test(parsed.protocol)) {
+      throw new Error("Protocolo inválido");
+    }
+  } catch (_) {
+    setLinkStatusMessage("Link inválido. Digite uma URL completa começando com http:// ou https://.", "err");
+    return false;
+  }
+
+  setLinkStatusMessage("Carregando link / stream no editor...", "ok");
+
+  if (state.videoUrl && state.sourceType === "file") {
+    try { URL.revokeObjectURL(state.videoUrl); } catch (_) {}
+  }
+
+  state.file = null;
+  state.videoUrl = cleanUrl;
+  state.sourceType = "url";
+  state.sourceName = parsed.hostname + (parsed.pathname && parsed.pathname !== "/" ? parsed.pathname.split("/").pop() : "");
+
+  const videoEl = $("videoEl");
+  if (!videoEl) return false;
+
+  const isLikelyPlaylistOrPage =
+    /\.(m3u8|mpd)(\?|$)/i.test(parsed.pathname) ||
+    /(youtube\.com|youtu\.be|twitch\.tv|tiktok\.com|kwai\.com|instagram\.com)/i.test(parsed.hostname);
+
+  videoEl.pause();
+  videoEl.crossOrigin = "anonymous";
+  videoEl.src = cleanUrl;
+
+  return new Promise((resolve) => {
+    let settled = false;
+    const finishOk = () => {
+      if (settled) return;
+      settled = true;
+      attachVideoMetadataHandlers(videoEl, state.sourceName || cleanUrl);
+      if (isLikelyPlaylistOrPage) {
+        setLinkStatusMessage(
+          "Link carregado no player. Se o navegador não reproduzir diretamente (ex.: live ao vivo, HLS/m3u8 ou página de rede social com proteção/CORS), use o app ClipFactory Desktop ou um link direto de arquivo de vídeo (.mp4 / .webm).",
+          "ok"
+        );
+      } else {
+        setLinkStatusMessage("Link carregado com sucesso no editor.", "ok");
+      }
+      resolve(true);
+    };
+
+    const finishErr = () => {
+      if (settled) return;
+      settled = true;
+      setLinkStatusMessage(
+        "Não foi possível reproduzir este link direto no navegador (pode ser live ao vivo/protegida, bloqueio CORS do servidor ou link de página e não de arquivo de vídeo). Para lives/VODs de plataformas como YouTube ou Twitch, utilize o modo Desktop ou envie um arquivo de vídeo local.",
+        "err"
+      );
+      resolve(false);
+    };
+
+    const timer = setTimeout(() => {
+      if (!settled && videoEl.readyState >= 1) {
+        finishOk();
+      } else {
+        finishErr();
+      }
+    }, 9000);
+
+    videoEl.onloadedmetadata = () => {
+      clearTimeout(timer);
+      finishOk();
+    };
+    videoEl.onerror = () => {
+      clearTimeout(timer);
+      finishErr();
+    };
+    videoEl.load();
+  });
+}
+
+function initSourceAndHookEnhancements() {
+  const tabLocal = $("tabLocalVideo");
+  const tabLink = $("tabLinkVideo");
+  const localPanel = $("localSourcePanel");
+  const linkPanel = $("linkSourcePanel");
+
+  if (tabLocal && tabLink && localPanel && linkPanel) {
+    tabLocal.onclick = () => {
+      tabLocal.classList.add("active");
+      tabLink.classList.remove("active");
+      localPanel.classList.remove("hidden");
+      linkPanel.classList.add("hidden");
+    };
+    tabLink.onclick = () => {
+      tabLink.classList.add("active");
+      tabLocal.classList.remove("active");
+      linkPanel.classList.remove("hidden");
+      localPanel.classList.add("hidden");
+      if ($("step1UrlInput")) $("step1UrlInput").focus();
+    };
+  }
+
+  if ($("step1LoadUrlBtn") && $("step1UrlInput")) {
+    $("step1LoadUrlBtn").onclick = () => loadVideoFromUrl($("step1UrlInput").value);
+    $("step1UrlInput").onkeydown = (e) => {
+      if (e.key === "Enter") {
+        e.preventDefault();
+        loadVideoFromUrl($("step1UrlInput").value);
+      }
+    };
+  }
+
+  if ($("editorQuickUrlBtn") && $("editorQuickUrlInput")) {
+    $("editorQuickUrlBtn").onclick = () => loadVideoFromUrl($("editorQuickUrlInput").value);
+    $("editorQuickUrlInput").onkeydown = (e) => {
+      if (e.key === "Enter") {
+        e.preventDefault();
+        loadVideoFromUrl($("editorQuickUrlInput").value);
+      }
+    };
+  }
+
+  if ($("randomHookBtn")) {
+    $("randomHookBtn").onclick = () => {
+      const idea = typeof pickRandomHookIdea === "function"
+        ? pickRandomHookIdea()
+        : (typeof VIRAL_TITLES !== "undefined" && VIRAL_TITLES.length ? VIRAL_TITLES[0] : "JOGADA INSANA! 🔥");
+      const tags = typeof pickRandomHashtags === "function"
+        ? pickRandomHashtags()
+        : (typeof VIRAL_HASHTAGS !== "undefined" && VIRAL_HASHTAGS.length ? VIRAL_HASHTAGS[0] : "#cortes #viral");
+      state.hook.text = idea;
+      state.hook.enabled = true;
+      if ($("hookText")) $("hookText").value = idea;
+      syncHookToggleLabel();
+      if ($("hookViralSuggestion")) {
+        $("hookViralSuggestion").textContent = "Sugestão de hashtags: " + tags;
+        $("hookViralSuggestion").className = "link-note ok";
+      }
+    };
+  }
+
+  if ($("randomPresetHookBtn") && typeof HOOK_PRESETS !== "undefined" && HOOK_PRESETS.length) {
+    $("randomPresetHookBtn").onclick = () => {
+      const idx = Math.floor(Math.random() * HOOK_PRESETS.length);
+      const p = HOOK_PRESETS[idx];
+      applyStyleToTarget(state.hook, p);
+      state.hook.enabled = true;
+      if ($("hookText") && !String($("hookText").value || "").trim()) {
+        state.hook.text = p.name;
+        $("hookText").value = p.name;
+      }
+      syncHookToggleLabel();
+      const grid = $("hookPresets");
+      if (grid) {
+        const items = grid.querySelectorAll(".presetItem");
+        items.forEach((el, i) => el.classList.toggle("sel", i === idx));
+        if (items[idx]) items[idx].scrollIntoView({ behavior: "smooth", block: "nearest" });
+      }
+      if ($("hookViralSuggestion")) {
+        $("hookViralSuggestion").textContent = "Preset de gancho aplicado: " + p.name;
+        $("hookViralSuggestion").className = "link-note ok";
+      }
+    };
+  }
+}
+
 function resetToStep1() {
   const videoEl = $("videoEl");
   videoEl.pause();
@@ -802,7 +1007,7 @@ function renderHeatmap(scores) {
 
 async function analyzeMoments() {
   const videoEl = $("videoEl");
-  if (!state.file || !videoEl.src) {
+  if ((!state.file && !state.videoUrl) || !videoEl.src) {
     alert("Envie um vídeo primeiro.");
     return;
   }
@@ -1016,7 +1221,7 @@ async function exportAndDownloadClip(clip) {
 
 async function exportAndDownloadCurrent() {
   const videoEl = $("videoEl");
-  if (!state.file || !videoEl.src) {
+  if ((!state.file && !state.videoUrl) || !videoEl.src) {
     alert("Envie um vídeo primeiro.");
     return;
   }
@@ -1439,7 +1644,7 @@ const TIER_MAP = {
 
 async function exportVerticalCut(opts = {}) {
   const videoEl = $("videoEl");
-  if (!state.file || !videoEl.src) {
+  if ((!state.file && !state.videoUrl) || !videoEl.src) {
     alert("Envie um vídeo primeiro.");
     return;
   }
@@ -1711,6 +1916,7 @@ window.addEventListener("DOMContentLoaded", () => {
   initCropControls();
   initTimeline();
   initCaptions();
+  initSourceAndHookEnhancements();
   startPreviewLoop();
 
   if ($("drop")) {

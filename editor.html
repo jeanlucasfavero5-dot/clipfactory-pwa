@@ -132,7 +132,7 @@ label{font-size:12px;color:#b7dec7;font-weight:700;display:block;margin:8px 0 4p
 .presetItem .pv{font-size:15px;font-weight:800;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;display:block;margin-bottom:4px}
 .presetItem .pn{font-size:10px;color:var(--muted);white-space:nowrap;overflow:hidden;text-overflow:ellipsis;display:block}
 
-#step1{max-width:640px;margin:26px auto;text-align:center}
+#step1{max-width:980px;margin:22px auto;text-align:center}
 #drop{border:2px dashed var(--border2);border-radius:18px;padding:42px 20px;cursor:pointer;transition:.2s;background:rgba(12,34,23,.35)}
 #drop:hover{border-color:var(--acc2);background:rgba(20,108,67,.2)}
 #drop .big{font-size:42px}
@@ -282,6 +282,19 @@ a.dl{display:inline-block;margin-top:10px;background:linear-gradient(135deg,var(
   margin-top: 10px;
 }
 
+
+.pre-grid3{display:grid;grid-template-columns:repeat(3,minmax(0,1fr));gap:12px;margin-top:6px;text-align:left}
+@media(max-width:780px){.pre-grid3{grid-template-columns:1fr}}
+.pre-card{background:rgba(5,16,10,.78);border:1px solid var(--border);border-radius:14px;padding:12px;display:flex;flex-direction:column;gap:8px}
+.pre-card.active-mode{border-color:var(--border2);box-shadow:0 0 0 2px rgba(34,197,94,.16)}
+.pre-card h3{font-size:13px;color:var(--acc2);font-weight:800}
+.pre-card p{font-size:11px;color:var(--muted);line-height:1.4}
+.range-box{background:rgba(3,10,7,.85);border:1px solid var(--border);border-radius:10px;padding:8px 10px;margin-top:6px}
+.range-row{display:flex;gap:8px;align-items:center}
+.range-row input[type="number"]{padding:6px 8px;font-size:12px}
+.chk-inline{display:flex;align-items:center;gap:6px;font-size:11px;color:#b7dec7;margin-top:6px;cursor:pointer}
+.chk-inline input{width:auto}
+
 </style>
 
 <style id="cfBgOverride">
@@ -332,28 +345,61 @@ a.dl{display:inline-block;margin-top:10px;background:linear-gradient(135deg,var(
   </section>
 
   <section id="step1" class="card">
-    <div class="card-h"><h2>1. Envie seu vídeo ou carregue por link / live</h2></div>
+    <div class="card-h"><h2>1. Escolha como começar antes de ir para o editor</h2></div>
     <div class="card-body">
-      <div class="source-tabs" role="tablist">
-        <button type="button" class="source-tab active" id="tabLocalVideo">📁 Arquivo local</button>
-        <button type="button" class="source-tab" id="tabLinkVideo">🔗 Link de vídeo / live</button>
-      </div>
-      <div id="localSourcePanel">
-        <div id="drop">
-          <div class="big">📤</div>
-          <p><b>Clique para escolher</b> ou arraste um arquivo de vídeo aqui</p>
-          <p class="pill" style="display:inline-block;margin-top:8px">MP4 · MOV · WEBM · MKV — processado no seu dispositivo</p>
+      <div class="pre-grid3">
+        <!-- Opção 1: Envio local -->
+        <div class="pre-card active-mode" id="cardOptLocal">
+          <h3>📁 1. Envio local</h3>
+          <p>Envie um arquivo de vídeo do seu aparelho (MP4, MOV, WEBM, MKV) direto para o editor.</p>
+          <div id="drop" style="padding:22px 12px">
+            <div class="big">📤</div>
+            <p style="font-size:12px"><b>Escolher arquivo</b> ou arrastar vídeo</p>
+          </div>
+          <input type="file" id="fileInput" accept="video/*" class="hidden">
         </div>
-        <input type="file" id="fileInput" accept="video/*" class="hidden">
-      </div>
-      <div id="linkSourcePanel" class="link-box hidden">
-        <label for="step1UrlInput" style="margin-top:0">Link direto de vídeo ou stream compatível (MP4, WebM, etc.)</label>
-        <div class="link-row">
-          <input type="url" id="step1UrlInput" placeholder="https://exemplo.com/video-ou-live.mp4">
-          <button type="button" class="small" id="step1LoadUrlBtn">▶ Carregar link</button>
+
+        <!-- Opção 2: Editar com link de plataforma / vídeo / live -->
+        <div class="pre-card" id="cardOptEditLink">
+          <h3>🔗 2. Editar com link / live</h3>
+          <p>Cole o link do vídeo ou live para abrir no editor (até 30 min ou inteiro se menor).</p>
+          <input type="url" id="step1UrlInput" placeholder="https://youtu.be/... ou stream/mp4">
+          <div class="range-box">
+            <div style="font-size:11px;font-weight:700;color:#b7dec7;margin-bottom:4px">Minutagem (máx. 30 min)</div>
+            <div class="range-row">
+              <input type="number" id="editLinkStartMin" min="0" max="30" step="0.5" value="0" title="Início (min)">
+              <span style="font-size:11px;color:var(--muted)">até</span>
+              <input type="number" id="editLinkEndMin" min="0.5" max="30" step="0.5" value="30" title="Fim (min)">
+            </div>
+            <label class="chk-inline">
+              <input type="checkbox" id="editLinkFullIfShorter" checked>
+              Se for menor que o limite, usar o vídeo inteiro
+            </label>
+          </div>
+          <button type="button" class="small" id="step1LoadUrlBtn">▶ Editar com link</button>
         </div>
-        <div id="step1UrlStatus" class="link-note">Dica: links diretos de mídia com suporte CORS abrem direto no editor. Plataformas externas (YouTube, Twitch ao vivo/VOD, etc.) podem bloquear leitura direta no navegador ou exigir download prévio via app Desktop.</div>
+
+        <!-- Opção 3: Download de vídeo (até 30 min ou inteiro se menor) -->
+        <div class="pre-card" id="cardOptDownload">
+          <h3>⬇ 3. Baixar vídeo (até 30m)</h3>
+          <p>Baixe o vídeo do link no aparelho escolhendo a minutagem (até 30 min) ou inteiro se menor.</p>
+          <input type="url" id="dlLinkUrlInput" placeholder="Link do vídeo / live para baixar...">
+          <div class="range-box">
+            <div style="font-size:11px;font-weight:700;color:#b7dec7;margin-bottom:4px">Minutagem (máx. 30 min)</div>
+            <div class="range-row">
+              <input type="number" id="dlLinkStartMin" min="0" max="30" step="0.5" value="0" title="Início (min)">
+              <span style="font-size:11px;color:var(--muted)">até</span>
+              <input type="number" id="dlLinkEndMin" min="0.5" max="30" step="0.5" value="30" title="Fim (min)">
+            </div>
+            <label class="chk-inline">
+              <input type="checkbox" id="dlLinkFullIfShorter" checked>
+              Se for menor, baixar inteiro
+            </label>
+          </div>
+          <button type="button" class="ghost small" id="downloadSourceVideoBtn">⬇ Baixar vídeo</button>
+        </div>
       </div>
+      <div id="step1UrlStatus" class="link-note" style="margin-top:12px;text-align:left">Escolha entre <b>Envio local</b>, <b>Editar com link / live</b> ou <b>Baixar vídeo (até 30m)</b>. Para links externos de YouTube/Twitch/lives protegidas no navegador ou PWA, o sistema tenta extração/proxy automático e, se a plataforma bloquear CORS/DRM, orienta o fluxo compatível sem travar.</div>
     </div>
   </section>
 
@@ -380,7 +426,6 @@ a.dl{display:inline-block;margin-top:10px;background:linear-gradient(135deg,var(
           <div class="quick-source-bar">
             <input type="url" id="editorQuickUrlInput" placeholder="Colar novo link de vídeo / live para editar..." style="flex:1 1 220px;background:rgba(3,10,7,.92);border:1px solid var(--border);color:var(--txt);border-radius:10px;padding:7px 10px;font-size:12px;outline:none">
             <button type="button" class="ghost small" id="editorQuickUrlBtn">🔗 Carregar link</button>
-            <button type="button" class="ghost small" id="downloadSourceVideoBtn">⬇ Baixar vídeo no aparelho</button>
           </div>
           <div id="editorSourceStatus" class="link-note"></div>
           <p class="signal" style="margin-top:6px">Clique na barra para navegar. Arraste as caixas de câmera e jogo e a barra divisória.</p>
@@ -609,7 +654,7 @@ async function triggerRealUpdate(btnEl, statusFn) {
 <script src="./wallet.js"></script>
 <script>
 "use strict";
-const EDITOR_VERSION = "0.026";
+const EDITOR_VERSION = "0.027";
 document.getElementById("appVersion").textContent = "v" + EDITOR_VERSION;
 
 if ("serviceWorker" in navigator) {

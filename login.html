@@ -373,14 +373,14 @@ input:focus{
   const target = (latestUpdateUrl || "./index.html");
   const sep = target.includes("?") ? "&" : "?";
   setTimeout(() => {
-    window.location.replace(`${target}${sep}v=0.026&t=${Date.now()}`);
+    window.location.replace(`${target}${sep}v=0.026&v=0.027&t=${Date.now()}`);
   }, 350);
 }
 </script>
 <script>
 "use strict";
 
-const APP_VERSION = "0.026";
+const APP_VERSION = "0.027";
 const VERSION_CHECK_URL = "./version.json";
 const SUPABASE_URL = "https://ipqjeacdfiomcxfuixdj.supabase.co";
 const SUPABASE_KEY = "sb_publishable_EWW84q_43YbOvMwB_Rua-A_X465PbLP";
@@ -440,7 +440,7 @@ async function checkForUpdates(showFeedbackIfUpToDate = false) {
     return;
   }
   try {
-    const res = await fetch(`${VERSION_CHECK_URL}?t=${Date.now()}`, { cache: "no-store" });
+    const res = await fetch(`${VERSION_CHECK_URL}?v=0.027&t=${Date.now()}`, { cache: "no-store" });
     if (!res.ok) return;
     const data = await res.json();
     if (data && data.package_url) { window.__cfPackageUrl = data.package_url; }

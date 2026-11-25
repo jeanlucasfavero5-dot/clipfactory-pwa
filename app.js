@@ -706,7 +706,38 @@ function initSourceAndHookEnhancements() {
     };
   }
 
-  if ($("editorQuickUrlBtn") && $("editorQuickUrlInput")) {
+  if ($("downloadSourceVideoBtn")) {
+    $("downloadSourceVideoBtn").onclick = async () => {
+      if (state.file && state.videoUrl) {
+        triggerBlobDownload(state.videoUrl, state.file.name || "video-clipfactory.mp4");
+        setLinkStatusMessage("Download do vídeo local iniciado no dispositivo.", "ok");
+        return;
+      }
+      if (state.videoUrl) {
+        try {
+          setLinkStatusMessage("Tentando baixar mídia do link...", "ok");
+          const resp = await fetch(state.videoUrl);
+          if (!resp.ok) throw new Error("HTTP " + resp.status);
+          const blob = await resp.blob();
+          const bUrl = URL.createObjectURL(blob);
+          const fname = (state.sourceName && state.sourceName.includes(".")) ? state.sourceName : "clipfactory-link-video.mp4";
+          triggerBlobDownload(bUrl, fname);
+          setTimeout(() => URL.revokeObjectURL(bUrl), 120000);
+          setLinkStatusMessage("Download do vídeo concluído no dispositivo!", "ok");
+        } catch (err) {
+          triggerBlobDownload(state.videoUrl, (state.sourceName && state.sourceName.includes(".")) ? state.sourceName : "clipfactory-link-video.mp4");
+          setLinkStatusMessage(
+            "O navegador/servidor não permitiu baixar o arquivo direto via fetch (CORS/proteção). Se não iniciar automaticamente, use o app Desktop com yt-dlp/ffmpeg.",
+            "err"
+          );
+        }
+        return;
+      }
+      setLinkStatusMessage("Nenhum vídeo carregado para baixar.", "err");
+    };
+  }
+
+    if ($("editorQuickUrlBtn") && $("editorQuickUrlInput")) {
     $("editorQuickUrlBtn").onclick = () => loadVideoFromUrl($("editorQuickUrlInput").value);
     $("editorQuickUrlInput").onkeydown = (e) => {
       if (e.key === "Enter") {

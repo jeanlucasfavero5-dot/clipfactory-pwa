@@ -1,6 +1,6 @@
 "use strict";
 
-const CACHE_NAME = "clipfactory-pwa-v0.021";
+const CACHE_NAME = "clipfactory-pwa-v0.026";
 const CORE_ASSETS = [
   "./",
   "./index.html",
@@ -42,7 +42,7 @@ self.addEventListener("fetch", (event) => {
   if (url.origin !== self.location.origin) return;
 
   if (url.pathname.endsWith("/version.json") || url.pathname.endsWith("version.json")) {
-    event.respondWith(fetch(event.request, { cache: "no-store" }).catch(() => caches.match(event.request)));
+    event.respondWith(fetch(event.request).catch(() => caches.match(event.request)));
     return;
   }
 

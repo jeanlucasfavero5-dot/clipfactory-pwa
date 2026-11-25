@@ -42,6 +42,7 @@ body{
   justify-content:center;
   padding:20px 16px 52px;
 }
+
 .login-box{
   width:100%;
   max-width:410px;
@@ -52,7 +53,11 @@ body{
   box-shadow:0 18px 48px rgba(0,0,0,.68);
   backdrop-filter:blur(12px);
 }
-.brand{text-align:center;margin-bottom:20px}
+
+.brand{
+  text-align:center;
+  margin-bottom:20px;
+}
 .brand-badge{
   display:inline-block;
   font-size:11px;
@@ -66,9 +71,18 @@ body{
   border-radius:99px;
   margin-bottom:10px;
 }
-.brand h1{font-size:28px;font-weight:900;letter-spacing:.4px}
+.brand h1{
+  font-size:28px;
+  font-weight:900;
+  letter-spacing:.4px;
+}
 .brand h1 span{color:var(--accent)}
-.brand p{font-size:13px;color:var(--muted);margin-top:4px}
+.brand p{
+  font-size:13px;
+  color:var(--muted);
+  margin-top:4px;
+}
+
 #updateBanner{
   display:none;
   background:var(--upd-bg);
@@ -98,12 +112,28 @@ body{
   font-size:13px;
   font-weight:800;
   cursor:pointer;
+  transition:.15s;
 }
-.btn-update:hover{background:linear-gradient(135deg, var(--upd-btn-hover), var(--upd-btn))}
+.btn-update:hover{
+  background:linear-gradient(135deg, var(--upd-btn-hover), var(--upd-btn));
+  box-shadow:0 0 18px rgba(220,38,38,.42);
+}
+
 .field{margin-bottom:14px}
-label{display:block;font-size:12px;font-weight:700;color:#b7dec7;margin-bottom:6px}
-.input-wrap{position:relative;display:flex;align-items:center}
-input[type="text"],input[type="password"]{
+label{
+  display:block;
+  font-size:12px;
+  font-weight:700;
+  color:#b7dec7;
+  margin-bottom:6px;
+}
+.input-wrap{
+  position:relative;
+  display:flex;
+  align-items:center;
+}
+input[type="text"],
+input[type="password"]{
   width:100%;
   background:rgba(3,10,7,.92);
   border:1px solid var(--border);
@@ -112,18 +142,43 @@ input[type="text"],input[type="password"]{
   padding:12px 42px 12px 13px;
   font-size:14px;
   outline:none;
+  transition:.15s;
 }
-input:focus{border-color:var(--border-hi);box-shadow:0 0 0 3px rgba(34,197,94,.15)}
+input:focus{
+  border-color:var(--border-hi);
+  box-shadow:0 0 0 3px rgba(34,197,94,.15);
+}
 .eye-btn{
-  position:absolute;right:8px;background:transparent;border:0;
-  color:var(--muted);font-size:15px;cursor:pointer;padding:6px;
+  position:absolute;
+  right:8px;
+  background:transparent;
+  border:0;
+  color:var(--muted);
+  font-size:15px;
+  cursor:pointer;
+  padding:6px;
 }
+.eye-btn:hover{color:var(--txt)}
+
 .options-row{
-  display:flex;align-items:center;justify-content:space-between;
-  gap:10px;margin-bottom:16px;font-size:12px;color:var(--muted);
+  display:flex;
+  align-items:center;
+  justify-content:space-between;
+  gap:10px;
+  margin-bottom:16px;
+  font-size:12px;
+  color:var(--muted);
 }
-.remember-label{display:inline-flex;align-items:center;gap:7px;cursor:pointer;margin:0;color:var(--txt)}
+.remember-label{
+  display:inline-flex;
+  align-items:center;
+  gap:7px;
+  cursor:pointer;
+  margin:0;
+  color:var(--txt);
+}
 .remember-label input{accent-color:var(--accent);width:15px;height:15px}
+
 .btn-primary{
   width:100%;
   background:linear-gradient(135deg, var(--btn-g2), var(--btn-g1));
@@ -134,27 +189,77 @@ input:focus{border-color:var(--border-hi);box-shadow:0 0 0 3px rgba(34,197,94,.1
   font-size:15px;
   font-weight:800;
   cursor:pointer;
+  transition:.15s;
 }
-.btn-primary:hover:not(:disabled){background:linear-gradient(135deg, var(--btn-g-hover), var(--btn-g2))}
-.btn-primary:disabled{opacity:.55;cursor:not-allowed}
+.btn-primary:hover:not(:disabled){
+  background:linear-gradient(135deg, var(--btn-g-hover), var(--btn-g2));
+  box-shadow:0 0 20px rgba(25,135,84,.42);
+  transform:translateY(-1px);
+}
+.btn-primary:disabled{
+  opacity:.55;
+  cursor:not-allowed;
+}
+
 .btn-secondary{
-  width:100%;margin-top:9px;
-  background:rgba(15,81,50,.22);color:#bbf7d0;
-  border:1px solid var(--border);border-radius:12px;
-  padding:11px 14px;font-size:14px;font-weight:800;cursor:pointer;min-height:42px;
+  width:100%;
+  margin-top:9px;
+  background:rgba(15,81,50,.22);
+  color:#bbf7d0;
+  border:1px solid var(--border);
+  border-radius:12px;
+  padding:11px 14px;
+  font-size:14px;
+  font-weight:800;
+  cursor:pointer;
+  min-height:42px;
+  transition:.15s;
 }
-#statusBox{margin-top:14px;font-size:12px;line-height:1.45;min-height:18px;text-align:center;color:var(--muted)}
+.btn-secondary:hover{
+  background:rgba(20,108,67,.36);
+  border-color:var(--border-hi);
+}
+
+#statusBox{
+  margin-top:14px;
+  font-size:12px;
+  line-height:1.45;
+  min-height:18px;
+  text-align:center;
+  color:var(--muted);
+}
 #statusBox.err{color:#fca5a5;font-weight:700}
 #statusBox.ok{color:#86efac;font-weight:700}
+
 .footer-links{
-  margin-top:16px;padding-top:14px;border-top:1px solid rgba(34,197,94,.14);
-  display:flex;justify-content:space-between;gap:10px;font-size:12px;
+  margin-top:16px;
+  padding-top:14px;
+  border-top:1px solid rgba(34,197,94,.14);
+  display:flex;
+  justify-content:space-between;
+  gap:10px;
+  font-size:12px;
 }
-.footer-links a{color:#86efac;text-decoration:none;font-weight:700}
+.footer-links a{
+  color:#86efac;
+  text-decoration:none;
+  font-weight:700;
+}
+.footer-links a:hover{text-decoration:underline}
+
 #appVersion{
-  position:fixed;right:14px;bottom:10px;font-size:11px;font-weight:800;letter-spacing:.6px;
-  color:#86efac;background:rgba(5,16,10,.88);border:1px solid var(--border);
-  padding:4px 10px;border-radius:99px;z-index:20;
+  position:fixed;
+  right:14px;
+  bottom:10px;
+  font-size:11px;
+  font-weight:800;
+  letter-spacing:.6px;
+  color:#86efac;
+  background:rgba(5,16,10,.88);
+  border:1px solid var(--border);
+  padding:4px 10px;
+  border-radius:99px;
+  z-index:20;
 }
 </style>
 </head>
@@ -172,7 +277,9 @@ input:focus{border-color:var(--border-hi);box-shadow:0 0 0 3px rgba(34,197,94,.1
       <span>Atualização disponível</span>
       <span id="remoteVerLabel"></span>
     </div>
-    <button type="button" class="btn-update" id="updateBtn">Atualizar para nova versão agora</button>
+    <button type="button" class="btn-update" id="updateBtn">
+      Atualizar para nova versão agora
+    </button>
   </section>
 
   <form id="loginForm" autocomplete="on">
@@ -213,13 +320,13 @@ input:focus{border-color:var(--border-hi);box-shadow:0 0 0 3px rgba(34,197,94,.1
   </div>
 </main>
 
-<div id="appVersion">v0.021</div>
+<div id="appVersion">v0.026</div>
 
 <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
 <script>
 "use strict";
 
-const APP_VERSION = "0.021";
+const APP_VERSION = "0.026";
 const VERSION_CHECK_URL = "./version.json";
 const SUPABASE_URL = "https://ipqjeacdfiomcxfuixdj.supabase.co";
 const SUPABASE_KEY = "sb_publishable_EWW84q_43YbOvMwB_Rua-A_X465PbLP";
@@ -282,6 +389,7 @@ async function checkForUpdates(showFeedbackIfUpToDate = false) {
     const res = await fetch(`${VERSION_CHECK_URL}?t=${Date.now()}`, { cache: "no-store" });
     if (!res.ok) return;
     const data = await res.json();
+    if (data && data.package_url) { window.__cfPackageUrl = data.package_url; }
     if (data && isNewerVersion(data.version, APP_VERSION)) {
       latestUpdateUrl = data.url || "./index.html";
       $("remoteVerLabel").textContent = `v${data.version}`;
@@ -293,7 +401,9 @@ async function checkForUpdates(showFeedbackIfUpToDate = false) {
       }
     }
   } catch (e) {
-    if (showFeedbackIfUpToDate) setStatus("Não foi possível verificar atualização agora.", "err");
+    if (showFeedbackIfUpToDate) {
+      setStatus("Não foi possível verificar atualização agora.", "err");
+    }
   }
 }
 

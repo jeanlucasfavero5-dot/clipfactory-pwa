@@ -500,6 +500,10 @@ a.dl{display:inline-block;margin-top:10px;background:linear-gradient(135deg,var(
           </select>
           <label>Cor</label>
           <div class="swatches" id="capColorSwatches"></div>
+          <div class="row" style="margin-top:6px;align-items:center">
+            <span style="font-size:11px;color:var(--muted);flex:0 0 auto">Cor livre:</span>
+            <input type="color" id="capCustomColor" value="#4ade80" style="width:54px;height:32px;padding:2px;flex:0 0 auto;cursor:pointer">
+          </div>
           <label>Fundo / efeito</label>
           <select id="capBg">
             <option value="outline">Contorno</option><option value="highlight">Destaque sólido</option>
@@ -509,6 +513,10 @@ a.dl{display:inline-block;margin-top:10px;background:linear-gradient(135deg,var(
           </select>
           <label>Cor do fundo / traço</label>
           <div class="swatches" id="capBgSwatches"></div>
+          <div class="row" style="margin-top:6px;align-items:center">
+            <span style="font-size:11px;color:var(--muted);flex:0 0 auto">Fundo livre:</span>
+            <input type="color" id="capCustomBgColor" value="#22c55e" style="width:54px;height:32px;padding:2px;flex:0 0 auto;cursor:pointer">
+          </div>
           <label>Animação de entrada</label>
           <select id="capAnim">
             <option value="none">Nenhuma</option><option value="pop">Pop</option>
@@ -545,6 +553,10 @@ a.dl{display:inline-block;margin-top:10px;background:linear-gradient(135deg,var(
           </select>
           <label>Cor</label>
           <div class="swatches" id="hookColorSwatches"></div>
+          <div class="row" style="margin-top:6px;align-items:center">
+            <span style="font-size:11px;color:var(--muted);flex:0 0 auto">Cor livre:</span>
+            <input type="color" id="hookCustomColor" value="#ffd166" style="width:54px;height:32px;padding:2px;flex:0 0 auto;cursor:pointer">
+          </div>
           <label>Fundo / efeito</label>
           <select id="hookBg">
             <option value="outline">Contorno</option><option value="highlight">Destaque sólido</option>
@@ -554,6 +566,10 @@ a.dl{display:inline-block;margin-top:10px;background:linear-gradient(135deg,var(
           </select>
           <label>Cor do fundo / traço</label>
           <div class="swatches" id="hookBgSwatches"></div>
+          <div class="row" style="margin-top:6px;align-items:center">
+            <span style="font-size:11px;color:var(--muted);flex:0 0 auto">Fundo livre:</span>
+            <input type="color" id="hookCustomBgColor" value="#07140e" style="width:54px;height:32px;padding:2px;flex:0 0 auto;cursor:pointer">
+          </div>
           <label>Animação de entrada</label>
           <select id="hookAnim">
             <option value="none">Nenhuma</option><option value="pop">Pop</option>
@@ -654,7 +670,7 @@ async function triggerRealUpdate(btnEl, statusFn) {
 <script src="./wallet.js"></script>
 <script>
 "use strict";
-const EDITOR_VERSION = "0.027";
+const EDITOR_VERSION = "0.028";
 document.getElementById("appVersion").textContent = "v" + EDITOR_VERSION;
 
 if ("serviceWorker" in navigator) {

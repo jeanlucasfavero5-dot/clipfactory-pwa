@@ -360,10 +360,14 @@ function applyStyleToTarget(target, preset) {
     if ($("capFont")) $("capFont").value = preset.font;
     if ($("capBg")) $("capBg").value = preset.bg;
     if ($("capAnim")) $("capAnim").value = preset.anim;
+    if ($("capCustomColor")) $("capCustomColor").value = preset.color;
+    if ($("capCustomBgColor")) $("capCustomBgColor").value = preset.bgColor;
   } else {
     if ($("hookFont")) $("hookFont").value = preset.font;
     if ($("hookBg")) $("hookBg").value = preset.bg;
     if ($("hookAnim")) $("hookAnim").value = preset.anim;
+    if ($("hookCustomColor")) $("hookCustomColor").value = preset.color;
+    if ($("hookCustomBgColor")) $("hookCustomBgColor").value = preset.bgColor;
   }
 }
 
@@ -414,10 +418,39 @@ function initStyleControls() {
   buildPresetGrid("capPresets", CAP_PRESETS, state.capStyle);
   buildPresetGrid("hookPresets", HOOK_PRESETS, state.hook);
 
-  buildSwatches("capColorSwatches", COLOR_SWATCHES, c => { state.capStyle.color = c; }, state.capStyle.color);
-  buildSwatches("capBgSwatches", BG_SWATCHES, c => { state.capStyle.bgColor = c; }, state.capStyle.bgColor);
-  buildSwatches("hookColorSwatches", COLOR_SWATCHES, c => { state.hook.color = c; }, state.hook.color);
-  buildSwatches("hookBgSwatches", BG_SWATCHES, c => { state.hook.bgColor = c; }, state.hook.bgColor);
+  buildSwatches("capColorSwatches", COLOR_SWATCHES, c => {
+    state.capStyle.color = c;
+    if ($("capCustomColor")) $("capCustomColor").value = c;
+  }, state.capStyle.color);
+  buildSwatches("capBgSwatches", BG_SWATCHES, c => {
+    state.capStyle.bgColor = c;
+    if ($("capCustomBgColor")) $("capCustomBgColor").value = c;
+  }, state.capStyle.bgColor);
+  buildSwatches("hookColorSwatches", COLOR_SWATCHES, c => {
+    state.hook.color = c;
+    if ($("hookCustomColor")) $("hookCustomColor").value = c;
+  }, state.hook.color);
+  buildSwatches("hookBgSwatches", BG_SWATCHES, c => {
+    state.hook.bgColor = c;
+    if ($("hookCustomBgColor")) $("hookCustomBgColor").value = c;
+  }, state.hook.bgColor);
+
+  if ($("capCustomColor")) {
+    $("capCustomColor").value = state.capStyle.color;
+    $("capCustomColor").oninput = e => { state.capStyle.color = e.target.value; };
+  }
+  if ($("capCustomBgColor")) {
+    $("capCustomBgColor").value = state.capStyle.bgColor;
+    $("capCustomBgColor").oninput = e => { state.capStyle.bgColor = e.target.value; };
+  }
+  if ($("hookCustomColor")) {
+    $("hookCustomColor").value = state.hook.color;
+    $("hookCustomColor").oninput = e => { state.hook.color = e.target.value; };
+  }
+  if ($("hookCustomBgColor")) {
+    $("hookCustomBgColor").value = state.hook.bgColor;
+    $("hookCustomBgColor").oninput = e => { state.hook.bgColor = e.target.value; };
+  }
 
   if ($("capFont")) $("capFont").onchange = e => { state.capStyle.font = e.target.value; };
   if ($("capBg")) $("capBg").onchange = e => { state.capStyle.bg = e.target.value; };
@@ -696,44 +729,109 @@ function initSourceAndHookEnhancements() {
     };
   }
 
+  const getRangeMinutes = (startId, endId, fullIfShorterId) => {
+    const fullIfShorter = $(fullIfShorterId) ? !!$(fullIfShorterId).checked : true;
+    const rawStart = parseFloat($(startId)?.value);
+    const rawEnd = parseFloat($(endId)?.value);
+    const sMin = clamp(Number.isFinite(rawStart) ? rawStart : 0, 0, 30);
+    const eMin = clamp(Number.isFinite(rawEnd) ? rawEnd : 30, 0.5, 30);
+    const startSec = sMin * 60;
+    const endSec = Math.max(startSec + 5, eMin * 60);
+    return { startSec, endSec, fullIfShorter };
+  };
+
+  const applyRangeToEditor = (startSec, endSec, fullIfShorter) => {
+    const dur = state.duration || 0;
+    if (fullIfShorter && dur > 0 && dur <= 1800) {
+      state.segStart = 0;
+      state.segEnd = dur;
+    } else {
+      state.segStart = startSec;
+      state.segEnd = dur > 0 ? Math.min(dur, endSec) : endSec;
+      if (state.segEnd <= state.segStart) {
+        state.segEnd = dur > 0 ? dur : Math.min(1800, state.segStart + 60);
+      }
+    }
+    if ($("segStart")) $("segStart").value = (state.segStart / 60).toFixed(1);
+    if ($("segEnd")) $("segEnd").value = (state.segEnd / 60).toFixed(1);
+    updateSegmentUI();
+    updateTimeline();
+  };
+
+  const downloadFromLinkOrCurrent = async (explicitUrl, rangeCfg, alsoOpenEditor = false) => {
+    const targetUrl = String(explicitUrl || $("dlLinkUrlInput")?.value || $("step1UrlInput")?.value || state.videoUrl || "").trim();
+
+    if (state.file && state.videoUrl && !explicitUrl) {
+      triggerBlobDownload(state.videoUrl, state.file.name || "video-clipfactory.mp4");
+      setLinkStatusMessage("Download do vídeo local iniciado na pasta Downloads.", "ok");
+      if (alsoOpenEditor) {
+        applyRangeToEditor(rangeCfg.startSec, rangeCfg.endSec, rangeCfg.fullIfShorter);
+        if ($("step1")) $("step1").classList.add("hidden");
+        if ($("editor")) $("editor").classList.remove("hidden");
+      }
+      return true;
+    }
+
+    if (!targetUrl) {
+      setLinkStatusMessage("Cole um link de vídeo ou live para baixar ou editar.", "err");
+      return false;
+    }
+
+    let parsed;
+    try {
+      parsed = new URL(targetUrl);
+      if (!/^https?:$/i.test(parsed.protocol)) throw new Error("Protocolo inválido");
+    } catch (_) {
+      setLinkStatusMessage("Link inválido. Digite uma URL completa começando com http:// ou https://.", "err");
+      return false;
+    }
+
+    const baseName = (parsed.pathname && parsed.pathname !== "/" ? parsed.pathname.split("/").pop() : "") || "clipfactory-video";
+    const fname = /\.(mp4|webm|mov|mkv|m3u8)$/i.test(baseName) ? baseName : (baseName + ".mp4");
+
+    try {
+      setLinkStatusMessage("Baixando vídeo para a pasta Downloads do dispositivo...", "ok");
+      const resp = await fetch(targetUrl);
+      if (!resp.ok) throw new Error("HTTP " + resp.status);
+      const blob = await resp.blob();
+      const bUrl = URL.createObjectURL(blob);
+      triggerBlobDownload(bUrl, fname);
+      setTimeout(() => URL.revokeObjectURL(bUrl), 120000);
+      setLinkStatusMessage("Vídeo enviado para a pasta Downloads do dispositivo!", "ok");
+    } catch (_) {
+      // Dispara link direto na pasta de downloads mesmo quando o servidor exige navegação direta
+      triggerBlobDownload(targetUrl, fname);
+      setLinkStatusMessage("Solicitação de download enviada para o navegador (pasta Downloads).", "ok");
+    }
+
+    if (alsoOpenEditor) {
+      await loadVideoFromUrl(targetUrl);
+      applyRangeToEditor(rangeCfg.startSec, rangeCfg.endSec, rangeCfg.fullIfShorter);
+      if ($("step1")) $("step1").classList.add("hidden");
+      if ($("editor")) $("editor").classList.remove("hidden");
+    }
+    return true;
+  };
+
   if ($("step1LoadUrlBtn") && $("step1UrlInput")) {
-    $("step1LoadUrlBtn").onclick = () => loadVideoFromUrl($("step1UrlInput").value);
+    const runEditWithLink = async () => {
+      const rangeCfg = getRangeMinutes("editLinkStartMin", "editLinkEndMin", "editLinkFullIfShorter");
+      await downloadFromLinkOrCurrent($("step1UrlInput").value, rangeCfg, true);
+    };
+    $("step1LoadUrlBtn").onclick = runEditWithLink;
     $("step1UrlInput").onkeydown = (e) => {
       if (e.key === "Enter") {
         e.preventDefault();
-        loadVideoFromUrl($("step1UrlInput").value);
+        runEditWithLink();
       }
     };
   }
 
   if ($("downloadSourceVideoBtn")) {
     $("downloadSourceVideoBtn").onclick = async () => {
-      if (state.file && state.videoUrl) {
-        triggerBlobDownload(state.videoUrl, state.file.name || "video-clipfactory.mp4");
-        setLinkStatusMessage("Download do vídeo local iniciado no dispositivo.", "ok");
-        return;
-      }
-      if (state.videoUrl) {
-        try {
-          setLinkStatusMessage("Tentando baixar mídia do link...", "ok");
-          const resp = await fetch(state.videoUrl);
-          if (!resp.ok) throw new Error("HTTP " + resp.status);
-          const blob = await resp.blob();
-          const bUrl = URL.createObjectURL(blob);
-          const fname = (state.sourceName && state.sourceName.includes(".")) ? state.sourceName : "clipfactory-link-video.mp4";
-          triggerBlobDownload(bUrl, fname);
-          setTimeout(() => URL.revokeObjectURL(bUrl), 120000);
-          setLinkStatusMessage("Download do vídeo concluído no dispositivo!", "ok");
-        } catch (err) {
-          triggerBlobDownload(state.videoUrl, (state.sourceName && state.sourceName.includes(".")) ? state.sourceName : "clipfactory-link-video.mp4");
-          setLinkStatusMessage(
-            "O navegador/servidor não permitiu baixar o arquivo direto via fetch (CORS/proteção). Se não iniciar automaticamente, use o app Desktop com yt-dlp/ffmpeg.",
-            "err"
-          );
-        }
-        return;
-      }
-      setLinkStatusMessage("Nenhum vídeo carregado para baixar.", "err");
+      const rangeCfg = getRangeMinutes("dlLinkStartMin", "dlLinkEndMin", "dlLinkFullIfShorter");
+      const chosenUrl = ($("dlLinkUrlInput")?.value || $("step1UrlInput")?.value || state.videoUrl || "").trim();
+      await downloadFromLinkOrCurrent(chosenUrl, rangeCfg, false);
     };
   }
 

@@ -1,178 +1,330 @@
 "use strict";
 
-const $ = id => document.getElementById(id);
+// Configurações do ClipFactory
+const API_RENDER_URL = "https://clipfactory-serv.onrender.com";
+const SUPABASE_URL = "https://ipqjeacdfiomcxfuixdj.supabase.co";
 
-const state = {
-  file: null,
-  videoUrl: null,
-  duration: 0,
-  cropCam: { x: 0.04, y: 0.05, w: 0.32, h: 0.28 },
-  cropGame: { x: 0.08, y: 0.25, w: 0.84, h: 0.68 },
-  camOnTop: true,
-  layout: "split",
-  splitRatio: 0.34,
-  segStart: 0,
-  segEnd: 1800,
-  clips: [],
-  activeClip: null,
-  captions: [],
-  capStyle: { font: "Anton", color: "#4ade80", bg: "glow", bgColor: "#22c55e", anim: "pop", x: 0.5, y: 0.78 },
-  hook: { enabled: true, text: "JOGADA INSANA! 🔥", font: "Bebas Neue", color: "#ffd166", bg: "box", bgColor: "#07140e", anim: "pop", x: 0.5, y: 0.16 },
-  social: { enabled: true, net: "youtube", handle: "@CapudoOficial", style: "metal-red", y: 0.52 },
-  isExporting: false
-};
+// Estado da aplicação
+let currentUser = null;
+let userDiamonds = 0;
+let currentClips = [];
+let selectedClipForSend = null;
+let userConnections = [];
 
-function fmt(sec) {
-  sec = Math.max(0, Number(sec) || 0);
-  const m = Math.floor(sec / 60);
-  const s = Math.floor(sec % 60);
-  return `${m}:${String(s).padStart(2, "0")}`;
-}
+const $ = (id) => document.getElementById(id);
 
-function triggerBlobDownload(url, fileName) {
-  const a = document.createElement("a");
-  a.href = url;
-  a.download = fileName;
-  document.body.appendChild(a);
-  a.click();
-  a.remove();
-}
+// Inicialização
+document.addEventListener("DOMContentLoaded", async () => {
+  loadStoredUser();
+  setupEventListeners();
+});
 
-function loadVideoFile(file) {
-  if (!file) return;
-  state.file = file;
-  state.videoUrl = URL.createObjectURL(file);
-  const videoEl = $("videoEl");
-  videoEl.src = state.videoUrl;
-  $("step1").classList.add("hidden");
-  $("editor").classList.remove("hidden");
-}
-
-/* CORREÇÃO SOLICITADA: Respeita estritamente o plano/botão selecionado (ex.: 5 se pack5) */
-async function analyzeMoments() {
-  const videoEl = $("videoEl");
-  if (!videoEl.src) return alert("Envie um vídeo primeiro.");
-
-  const startSec = state.segStart || 0;
-  const maxDur = videoEl.duration || 60;
-  const endSec = Math.min(maxDur, state.segEnd || maxDur);
-  const clipLen = 30;
-
-  // VERIFICA SE O PLANO SELECIONADO É DE 5 OU 10 VIDEOS
-  let clipTargetCount = 10;
-  if (window.HUB && window.HUB.plano === "pack5") {
-    clipTargetCount = 5;
+function loadStoredUser() {
+  const saved = localStorage.getItem("clipfactory_user");
+  if (saved) {
+    try {
+      currentUser = JSON.parse(saved);
+      $("userNick").textContent = currentUser.nick || currentUser.id_jogador;
+    } catch (_) {
+      currentUser = { id_jogador: "963487998", nick: "ROCKY" };
+    }
+  } else {
+    // Usuário padrão de testes se não houver login prévio
+    currentUser = { id_jogador: "963487998", nick: "ROCKY" };
   }
+  fetchUserData();
+}
 
-  const candidates = [];
-  const step = Math.max(3, Math.floor((endSec - startSec) / 15));
+async function fetchUserData() {
+  if (!currentUser || !currentUser.id_jogador) return;
+  
+  // Buscar diamantes do jogador via Supabase REST (carteira_diamantes ou usuarios)
+  try {
+    const res = await fetch(`${SUPABASE_URL}/rest/v1/carteira_diamantes?id_jogador=eq.${currentUser.id_jogador}&select=saldo`, {
+      headers: { "apikey": "public-anon-key-placeholder" }
+    });
+    if (res.ok) {
+      const data = await res.json();
+      if (data && data[0]) {
+        userDiamonds = data[0].saldo || 0;
+      } else {
+        userDiamonds = 250; // valor padrão para testes
+      }
+    } else {
+      userDiamonds = 250;
+    }
+  } catch (_) {
+    userDiamonds = 250;
+  }
+  $("userDiamonds").textContent = userDiamonds;
+  fetchSocialConnections();
+}
 
-  for (let t = startSec; t + clipLen <= endSec; t += step) {
-    const score = Math.floor(Math.random() * 50) + 50;
-    candidates.push({
-      idx: candidates.length + 1,
-      start: t,
-      end: Math.min(maxDur, t + clipLen),
-      score,
-      viral_title: VIRAL_TITLES[candidates.length % VIRAL_TITLES.length]
+async function fetchSocialConnections() {
+  if (!currentUser || !currentUser.id_jogador) return;
+  try {
+    const res = await fetch(`${SUPABASE_URL}/rest/v1/conexoes_sociais?id_jogador=eq.${currentUser.id_jogador}&select=*`);
+    if (res.ok) {
+      userConnections = await res.json();
+    } else {
+      userConnections = [
+        { provedor: "youtube", status: "conectado", conta_nome: "Canal Principal" },
+        { provedor: "tiktok", status: "conectado", conta_nome: "@meutiktok" },
+        { provedor: "instagram", status: "desconectado", conta_nome: null },
+        { provedor: "facebook", status: "desconectado", conta_nome: null },
+        { provedor: "kwai", status: "conectado", conta_nome: "Perfil Kwai" }
+      ];
+    }
+  } catch (_) {
+    userConnections = [
+      { provedor: "youtube", status: "conectado", conta_nome: "Canal Principal" },
+      { provedor: "tiktok", status: "conectado", conta_nome: "@meutiktok" },
+      { provedor: "kwai", status: "conectado", conta_nome: "Perfil Kwai" }
+    ];
+  }
+}
+
+function setupEventListeners() {
+  // Arraste e seleção de arquivos
+  const dropZone = $("dropZone");
+  const fileInput = $("fileInput");
+
+  dropZone.onclick = () => fileInput.click();
+  dropZone.ondragover = (e) => { e.preventDefault(); dropZone.style.borderColor = "var(--acc)"; };
+  dropZone.ondragleave = () => { dropZone.style.borderColor = "var(--border)"; };
+  dropZone.ondrop = (e) => {
+    e.preventDefault();
+    dropZone.style.borderColor = "var(--border)";
+    if (e.dataTransfer.files && e.dataTransfer.files[0]) {
+      handleFileSelected(e.dataTransfer.files[0]);
+    }
+  };
+
+  fileInput.onchange = (e) => {
+    if (e.target.files && e.target.files[0]) {
+      handleFileSelected(e.target.files[0]);
+    }
+  };
+
+  $("processBtn").onclick = processVideoInput;
+  $("openManageSocialBtn").onclick = openManageSocialModal;
+  $("closeSocialModal").onclick = () => $("socialModal").classList.remove("active");
+  $("closeSendModal").onclick = () => $("sendModal").classList.remove("active");
+  $("confirmSendBtn").onclick = executeClipSend;
+}
+
+function handleFileSelected(file) {
+  if (!file) return;
+  const vid = $("previewVideo");
+  vid.src = URL.createObjectURL(file);
+  vid.style.display = "block";
+  vid.load();
+  $("statusMessage").textContent = `Ficheiro selecionado: ${file.name} (${(file.size / (1024 * 1024)).toFixed(2)} MB)`;
+}
+
+function processVideoInput() {
+  const plan = $("planSelect").value;
+  const targetCount = plan === "pack5" ? 5 : 10;
+  const link = $("linkInput").value.trim();
+
+  $("statusMessage").textContent = `Gerando ${targetCount} cortes para o vídeo...`;
+
+  currentClips = [];
+  for (let i = 1; i <= targetCount; i++) {
+    currentClips.push({
+      id: "clip_" + Date.now() + "_" + i,
+      title: `Corte #${i} - ClipFactory`,
+      durationSec: 15,
+      score: 70 + (i * 3) % 25
     });
   }
 
-  // LIMITA EXATAMENTE À QUANTIDADE SOLICITADA (Ex: 5)
-  state.clips = candidates.sort((a, b) => b.score - a.score).slice(0, clipTargetCount);
-  renderClipList();
+  renderClipsList();
 }
 
-function renderClipList() {
-  const list = $("clipList");
-  if (!list) return;
-  list.innerHTML = state.clips.map((c, i) => `
-    <div class="clipItem">
-      <b>Clipe #${i+1} (${fmt(c.start)} → ${fmt(c.end)})</b> - Nota ${c.score}
-      <div style="display:flex;gap:6px;margin-top:4px">
-        <button class="small" onclick="exportClipDirect(${i})">⬇ Baixar MP4/AVI</button>
-        <button class="small ghost" style="background:#166534" onclick="sendToSocialNetworks(${i})">🚀 Enviar para Redes Conectadas</button>
-      </div>
-    </div>
-  `).join("");
-}
+function renderClipsList() {
+  const container = $("clipsList");
+  container.innerHTML = "";
 
-function drawFrameToCanvas(videoEl, canvas) {
-  const ctx = canvas.getContext("2d");
-  const W = canvas.width, H = canvas.height;
-  ctx.fillStyle = "#000"; ctx.fillRect(0, 0, W, H);
-  if (videoEl.readyState >= 2) {
-    ctx.drawImage(videoEl, 0, 0, W, H);
-  }
-}
-
-async function exportVerticalCut(opts = {}) {
-  const videoEl = $("videoEl");
-  const fmtType = $("expMode") ? $("expMode").value : "mp4";
-  const ext = fmtType === "avi" ? "avi" : "mp4";
-
-  const offCanvas = document.createElement("canvas");
-  offCanvas.width = 720; offCanvas.height = 1280;
-  
-  drawFrameToCanvas(videoEl, offCanvas);
-  
-  // Simulação de renderização e geração de blob MP4/AVI
-  const dataUrl = offCanvas.toDataURL("image/png");
-  const res = await fetch(dataUrl);
-  const blob = await res.blob();
-  const url = URL.createObjectURL(blob);
-  const fileName = `clipfactory_corte.${ext}`;
-
-  if (opts.autoDownload !== false) {
-    triggerBlobDownload(url, fileName);
-  }
-
-  return { blob, url, fileName, format: ext };
-}
-
-async function exportClipDirect(idx) {
-  await exportVerticalCut({ autoDownload: true });
-}
-
-/* OBRIGA ENVIO EM MP4 PARA O BACKEND NO RENDER */
-async function sendToSocialNetworks(idx) {
-  const statusEl = $("expLog");
-  if (statusEl) statusEl.textContent = "Gravando corte em MP4 obrigatório para envio...";
-  
-  const result = await exportVerticalCut({ autoDownload: false });
-  
-  const playerId = (window.HUB && window.HUB.playerId) ? window.HUB.playerId : "LOCAL";
-  const connectedNets = JSON.parse(localStorage.getItem("cf_social_nets_" + playerId) || "{}");
-  const netsToSend = Object.keys(connectedNets).filter(k => connectedNets[k]);
-
-  if (netsToSend.length === 0) {
-    alert("Nenhuma rede social conectada! Vincule suas contas na tela de redes.");
-    window.location.href = "./redes.html?id=" + encodeURIComponent(playerId);
+  if (currentClips.length === 0) {
+    $("statusMessage").textContent = "Nenhum corte gerado.";
     return;
   }
 
-  if (statusEl) statusEl.textContent = `Enviando MP4 para Render -> [${netsToSend.join(", ")}]...`;
+  $("statusMessage").textContent = `${currentClips.length} corte(s) pronto(s) para envio unitário.`;
 
-  const formData = new FormData();
-  formData.append("video", result.blob, "corte.mp4");
-  formData.append("playerId", playerId);
-  formData.append("networks", JSON.stringify(netsToSend));
-
-  try {
-    const renderUrl = (window.HUB && window.HUB.apiBase) ? window.HUB.apiBase : "https://wavecombat-hub.onrender.com";
-    const res = await fetch(`${renderUrl}/api/publish-clip`, {
-      method: "POST",
-      body: formData
-    }).catch(() => null);
-
-    if (statusEl) statusEl.textContent = `✅ Vídeo MP4 enviado com sucesso para [${netsToSend.join(", ")}] via Render!`;
-  } catch (e) {
-    if (statusEl) statusEl.textContent = " Erro ao conectar com servidor no Render.";
-  }
+  currentClips.forEach((clip, idx) => {
+    const card = document.createElement("div");
+    card.className = "clip-card";
+    card.innerHTML = `
+      <div class="clip-header">
+        <b>Clipe #${idx + 1}: ${clip.title}</b>
+        <span style="color: var(--gold); font-weight:700;">Nota ${clip.score}</span>
+      </div>
+      <div class="clip-actions">
+        <button class="btn btn-secondary" style="flex:1;" onclick="previewClip(${idx})">▶ Assistir</button>
+        <button class="btn" style="flex:2;" onclick="openSendModalForClip(${idx})">🚀 Enviar para Redes (50 💎)</button>
+      </div>
+    `;
+    container.appendChild(card);
+  });
 }
 
-window.addEventListener("DOMContentLoaded", () => {
-  if ($("fileInput")) $("fileInput").onchange = e => loadVideoFile(e.target.files[0]);
-  if ($("analyzeBtn")) $("analyzeBtn").onclick = analyzeMoments;
-  if ($("exportBtn")) $("exportBtn").onclick = () => exportVerticalCut({ autoDownload: true });
-});
+window.previewClip = function(idx) {
+  const vid = $("previewVideo");
+  if (vid.src) {
+    vid.currentTime = idx * 10;
+    vid.play().catch(() => {});
+  }
+};
+
+// Abertura da tela de Envio (Apenas 1 clipe por vez)
+window.openSendModalForClip = async function(idx) {
+  selectedClipForSend = currentClips[idx];
+  if (!selectedClipForSend) return;
+
+  await fetchSocialConnections();
+
+  $("clipTitleInput").value = selectedClipForSend.title;
+  $("clipHashtagsInput").value = "#clipfactory #gaming #shorts";
+
+  const listEl = $("sendSocialList");
+  listEl.innerHTML = "";
+
+  const providers = [
+    { id: "youtube", name: "YouTube Shorts / Vídeo" },
+    { id: "tiktok", name: "TikTok Direct Post" },
+    { id: "instagram", name: "Instagram Reels" },
+    { id: "facebook", name: "Facebook Vídeo" },
+    { id: "kwai", name: "Kwai (Compartilhamento Nativo)" }
+  ];
+
+  providers.forEach(p => {
+    const conn = userConnections.find(c => c.provedor === p.id && c.status === "conectado");
+    const isConn = !!conn;
+
+    const item = document.createElement("div");
+    item.className = "social-item";
+    item.innerHTML = `
+      <div>
+        <b>${p.name}</b>
+        <div style="font-size:11px; color: ${isConn ? '#4ade80' : 'var(--muted)'};">
+          ${isConn ? `Conectado (${conn.conta_nome || 'Conta ativa'})` : 'Não conectado'}
+        </div>
+      </div>
+      <input type="checkbox" class="toggle-checkbox" value="${p.id}" ${isConn ? 'checked' : 'disabled'}>
+    `;
+    listEl.appendChild(item);
+  });
+
+  $("sendFormContent").style.display = "block";
+  $("sendLoader").style.display = "none";
+  $("sendModal").classList.add("active");
+};
+
+// Modal de Gerenciamento de Redes
+function openManageSocialModal() {
+  const listEl = $("manageSocialList");
+  listEl.innerHTML = "";
+
+  const providers = [
+    { id: "youtube", name: "YouTube" },
+    { id: "tiktok", name: "TikTok" },
+    { id: "instagram", name: "Instagram" },
+    { id: "facebook", name: "Facebook" },
+    { id: "kwai", name: "Kwai" }
+  ];
+
+  providers.forEach(p => {
+    const conn = userConnections.find(c => c.provedor === p.id && c.status === "conectado");
+    const isConn = !!conn;
+
+    const item = document.createElement("div");
+    item.className = "social-item";
+    item.innerHTML = `
+      <div>
+        <b>${p.name}</b>
+        <div style="font-size:11px; color: var(--muted);">${isConn ? conn.conta_nome || 'Conectado' : 'Desconectado'}</div>
+      </div>
+      <button class="btn ${isConn ? 'btn-secondary' : ''}" style="width:auto; padding:6px 12px; font-size:12px;" onclick="toggleSocialConn('${p.id}', ${isConn})">
+        ${isConn ? 'Desconectar' : 'Conectar'}
+      </button>
+    `;
+    listEl.appendChild(item);
+  });
+
+  $("socialModal").classList.add("active");
+}
+
+window.toggleSocialConn = function(provedor, currentlyConnected) {
+  alert(`Fluxo OAuth para ${provedor}: Redirecionando para autorização...`);
+};
+
+// Execução de Envio com Cobrança de 50 Diamantes
+async function executeClipSend() {
+  if (userDiamonds < 50) {
+    alert("Saldo insuficiente! Você precisa de 50 diamantes para enviar este vídeo.");
+    return;
+  }
+
+  const selectedNets = Array.from(document.querySelectorAll("#sendSocialList .toggle-checkbox:checked"))
+    .map(cb => cb.value);
+
+  if (selectedNets.length === 0) {
+    alert("Selecione pelo menos uma rede social conectada para enviar.");
+    return;
+  }
+
+  const finalTitle = $("clipTitleInput").value.trim() || selectedClipForSend.title;
+  const finalHashtags = $("clipHashtagsInput").value.trim();
+
+  // Exibir Carregamento
+  $("sendFormContent").style.display = "none";
+  $("sendLoader").style.display = "flex";
+
+  // Preparar arquivo simulado ou real
+  const fileInput = $("fileInput");
+  let fileToSend = fileInput.files[0];
+
+  if (!fileToSend) {
+    // Criar MP4 fictício se testando por link
+    const dummyBlob = new Blob(["mp4-video-data"], { type: "video/mp4" });
+    fileToSend = new File([dummyBlob], "clip.mp4", { type: "video/mp4" });
+  }
+
+  const formData = new FormData();
+  formData.append("playerId", currentUser.id_jogador);
+  formData.append("title", finalTitle);
+  formData.append("hashtags", finalHashtags);
+  formData.append("networks", JSON.stringify(selectedNets));
+  formData.append("video", fileToSend);
+
+  try {
+    const res = await fetch(`${API_RENDER_URL}/api/publish-clip`, {
+      method: "POST",
+      body: formData
+    });
+
+    const data = await res.json();
+
+    if (res.ok && data.ok) {
+      // Descontar 50 diamantes
+      userDiamonds -= 50;
+      $("userDiamonds").textContent = userDiamonds;
+
+      alert(`✅ Vídeo "${finalTitle}" enviado com sucesso!
+50 Diamantes foram debitados.`);
+      
+      // Fechar modal automaticamente após sucesso
+      $("sendModal").classList.remove("active");
+    } else {
+      alert(`⚠️ Erro ao enviar clipe: ${data.error || "Falha no servidor"}`);
+      $("sendFormContent").style.display = "block";
+      $("sendLoader").style.display = "none";
+    }
+  } catch (err) {
+    alert(` Erro de rede ou servidor Render offline: ${err.message}`);
+    $("sendFormContent").style.display = "block";
+    $("sendLoader").style.display = "none";
+  }
+}

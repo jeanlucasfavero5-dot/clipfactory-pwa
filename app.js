@@ -1490,7 +1490,11 @@ function exportSrt() {
     return `${hh}:${mm}:${ss},${String(ms).padStart(3, "0")}`;
   };
 
-  const srt = validCaps.map((c, idx) => `${idx + 1}\n${toSrtTime(c.start)} --> ${toSrtTime(c.end)}\n${c.text}\n`).join("\n");
+  const srt = validCaps.map((c, idx) => `${idx + 1}
+${toSrtTime(c.start)} --> ${toSrtTime(c.end)}
+${c.text}
+`).join("
+");
   const blob = new Blob([srt], { type: "text/srt;charset=utf-8" });
   const a = document.createElement("a");
   a.href = URL.createObjectURL(blob);

@@ -88,6 +88,9 @@ function setExportLog(msg, pct = null) {
   }
 }
 
+/* ============================================================
+   Patch EBML / WebM: regrava Duration + Cues + SeekHead (remux via ts-ebml)
+   ============================================================ */
 function fixWebmBlobDurationFallback(blob, durationSec) {
   return blob.arrayBuffer().then((buf) => {
     const bytes = new Uint8Array(buf);
@@ -185,11 +188,15 @@ function fixWebmBlobDuration(blob, durationSec) {
       }
       return new Blob(parts, { type: blob.type || "video/webm" });
     } catch (e) {
+      console.warn("Remux ts-ebml falhou, usando fallback de bytes:", e);
       return fixWebmBlobDurationFallback(blob, durationSec);
     }
   }).catch(() => blob);
 }
 
+/* ============================================================
+   RIFF / AVI MJPEG container builder from captured JPEG frames
+   ============================================================ */
 function buildAviFromJpegFrames(frames, width, height, fps) {
   const safeFps = Math.max(1, Math.min(60, Number(fps) || 30));
   const useSecPerFrame = Math.round(1000000 / safeFps);
@@ -303,6 +310,9 @@ function buildAviFromJpegFrames(frames, width, height, fps) {
   return new Blob([out], { type: "video/avi" });
 }
 
+/* ============================================================
+   Capture thumbnail data URL at a specific timestamp
+   ============================================================ */
 async function captureThumbnailAt(timeSec) {
   const videoEl = $("videoEl");
   if (!videoEl || !videoEl.src) return null;
@@ -404,25 +414,22 @@ function syncHookToggleLabel() {
 }
 
 function initStyleControls() {
-  buildPresetGrid("capPresets", typeof CAP_PRESETS !== "undefined" ? CAP_PRESETS : [], state.capStyle);
-  buildPresetGrid("hookPresets", typeof HOOK_PRESETS !== "undefined" ? HOOK_PRESETS : [], state.hook);
+  buildPresetGrid("capPresets", CAP_PRESETS, state.capStyle);
+  buildPresetGrid("hookPresets", HOOK_PRESETS, state.hook);
 
-  const palette = typeof COLOR_SWATCHES !== "undefined" ? COLOR_SWATCHES : ["#ffffff", "#ffd166", "#4ade80", "#38bdf8", "#f87171"];
-  const bgPalette = typeof BG_SWATCHES !== "undefined" ? BG_SWATCHES : ["#07140e", "#22c55e", "#e11d48", "#111827", "#f59e0b"];
-
-  buildSwatches("capColorSwatches", palette, c => {
+  buildSwatches("capColorSwatches", COLOR_SWATCHES, c => {
     state.capStyle.color = c;
     if ($("capCustomColor")) $("capCustomColor").value = c;
   }, state.capStyle.color);
-  buildSwatches("capBgSwatches", bgPalette, c => {
+  buildSwatches("capBgSwatches", BG_SWATCHES, c => {
     state.capStyle.bgColor = c;
     if ($("capCustomBgColor")) $("capCustomBgColor").value = c;
   }, state.capStyle.bgColor);
-  buildSwatches("hookColorSwatches", palette, c => {
+  buildSwatches("hookColorSwatches", COLOR_SWATCHES, c => {
     state.hook.color = c;
     if ($("hookCustomColor")) $("hookCustomColor").value = c;
   }, state.hook.color);
-  buildSwatches("hookBgSwatches", bgPalette, c => {
+  buildSwatches("hookBgSwatches", BG_SWATCHES, c => {
     state.hook.bgColor = c;
     if ($("hookCustomBgColor")) $("hookCustomBgColor").value = c;
   }, state.hook.bgColor);
@@ -482,6 +489,7 @@ function initStyleControls() {
     $("hookAnim").onchange = e => { state.hook.anim = e.target.value; };
   }
 
+  // Controles da Barrinha Social adicionados
   if ($("socialToggle")) {
     $("socialToggle").onchange = e => { state.social.enabled = e.target.checked; };
   }
@@ -585,20 +593,17 @@ function loadVideoFile(file) {
   if (state.videoUrl) URL.revokeObjectURL(state.videoUrl);
   state.file = file;
   state.videoUrl = URL.createObjectURL(file);
-  state.sourceType = "file";
-  state.sourceName = file.name || "video-local.mp4";
   state.duration = 0;
   state.segStart = 0;
   state.segEnd = state.maxSegSec;
 
   const videoEl = $("videoEl");
-  if (!videoEl) return;
   videoEl.preload = "auto";
   videoEl.src = state.videoUrl;
   videoEl.load();
 
-  if ($("step1")) $("step1").classList.add("hidden");
-  if ($("editor")) $("editor").classList.remove("hidden");
+  $("step1").classList.add("hidden");
+  $("editor").classList.remove("hidden");
 
   const onMetaOrDur = () => {
     applyLoadedDuration(videoEl);
@@ -792,87 +797,28 @@ function initSourceAndHookEnhancements() {
       return false;
     }
 
-    const isPlatformPage = /(youtube\.com|youtu\.be|twitch\.tv|tiktok\.com|kwai\.com|instagram\.com|facebook\.com|fb\.watch)/i.test(parsed.hostname);
     const baseName = (parsed.pathname && parsed.pathname !== "/" ? parsed.pathname.split("/").pop() : "") || "clipfactory-video";
     const fname = /\.(mp4|webm|mov|mkv|m3u8)$/i.test(baseName) ? baseName : (baseName + ".mp4");
 
-    const apiBase = (typeof window.HUB !== "undefined" && window.HUB.apiBase)
-      ? String(window.HUB.apiBase).replace(/\/+$/, "")
-      : "";
-
-    let downloadedBlob = null;
-    let resolvedFileName = fname;
-
-    if (apiBase) {
-      try {
-        setLinkStatusMessage("Extraindo e baixando vídeo via API ClipFactory...", "ok");
-        const params = new URLSearchParams({
-          url: targetUrl,
-          start_sec: String(Math.round(rangeCfg.startSec)),
-          end_sec: String(Math.round(rangeCfg.endSec)),
-          full_if_shorter: String(!!rangeCfg.fullIfShorter)
-        });
-        const apiResp = await fetch(`${apiBase}/api/download?${params.toString()}`);
-        if (!apiResp.ok) {
-          let detail = "HTTP " + apiResp.status;
-          try {
-            const errJson = await apiResp.json();
-            if (errJson?.detail) detail = errJson.detail;
-          } catch (_) {}
-          throw new Error(detail);
-        }
-        const disp = apiResp.headers.get("content-disposition") || "";
-        const matchName = disp.match(/filename="?([^";]+)"?/i);
-        if (matchName && matchName[1]) {
-          resolvedFileName = matchName[1];
-        }
-        downloadedBlob = await apiResp.blob();
-      } catch (apiErr) {
-        if (isPlatformPage) {
-          setLinkStatusMessage("Falha na API ao baixar link da plataforma: " + apiErr.message, "err");
-          return false;
-        }
-      }
-    }
-
-    if (!downloadedBlob && !isPlatformPage) {
-      try {
-        setLinkStatusMessage("Baixando vídeo para a pasta Downloads do dispositivo...", "ok");
-        const resp = await fetch(targetUrl);
-        if (!resp.ok) throw new Error("HTTP " + resp.status);
-        downloadedBlob = await resp.blob();
-      } catch (_) {
-        downloadedBlob = null;
-      }
-    }
-
-    if (downloadedBlob && downloadedBlob.size > 0) {
-      const bUrl = URL.createObjectURL(downloadedBlob);
-      triggerBlobDownload(bUrl, resolvedFileName);
+    try {
+      setLinkStatusMessage("Baixando vídeo para a pasta Downloads do dispositivo...", "ok");
+      const resp = await fetch(targetUrl);
+      if (!resp.ok) throw new Error("HTTP " + resp.status);
+      const blob = await resp.blob();
+      const bUrl = URL.createObjectURL(blob);
+      triggerBlobDownload(bUrl, fname);
       setTimeout(() => URL.revokeObjectURL(bUrl), 120000);
-      setLinkStatusMessage("Vídeo baixado para a pasta Downloads (" + resolvedFileName + ").", "ok");
-
-      if (alsoOpenEditor) {
-        const localFile = new File([downloadedBlob], resolvedFileName, { type: downloadedBlob.type || "video/mp4" });
-        loadVideoFile(localFile);
-        applyRangeToEditor(rangeCfg.startSec, rangeCfg.endSec, rangeCfg.fullIfShorter);
-      }
-      return true;
+      setLinkStatusMessage("Vídeo enviado para a pasta Downloads do dispositivo!", "ok");
+    } catch (_) {
+      triggerBlobDownload(targetUrl, fname);
+      setLinkStatusMessage("Solicitação de download enviada para o navegador (pasta Downloads).", "ok");
     }
 
-    if (isPlatformPage) {
-      setLinkStatusMessage(
-        "Links do YouTube/plataformas exigem a API Python (yt-dlp + ffmpeg) rodando em HUB.apiBase para baixar o arquivo direto sem abrir o site.",
-        "err"
-      );
-      return false;
-    }
-
-    triggerBlobDownload(targetUrl, fname);
-    setLinkStatusMessage("Solicitação de download enviada para o navegador.", "ok");
     if (alsoOpenEditor) {
       await loadVideoFromUrl(targetUrl);
       applyRangeToEditor(rangeCfg.startSec, rangeCfg.endSec, rangeCfg.fullIfShorter);
+      if ($("step1")) $("step1").classList.add("hidden");
+      if ($("editor")) $("editor").classList.remove("hidden");
     }
     return true;
   };
@@ -945,10 +891,8 @@ function initSourceAndHookEnhancements() {
 
 function resetToStep1() {
   const videoEl = $("videoEl");
-  if (videoEl) {
-    videoEl.pause();
-    videoEl.removeAttribute("src");
-  }
+  videoEl.pause();
+  videoEl.removeAttribute("src");
   if (state.videoUrl) URL.revokeObjectURL(state.videoUrl);
   state.file = null;
   state.videoUrl = null;
@@ -959,8 +903,8 @@ function resetToStep1() {
     $("clipList").innerHTML = `<p class="signal">Clique em <b>Analisar</b> para gerar sugestões de corte com nota.</p>`;
   }
   if ($("downloadAllLocalBtn")) $("downloadAllLocalBtn").style.display = "none";
-  if ($("editor")) $("editor").classList.add("hidden");
-  if ($("step1")) $("step1").classList.remove("hidden");
+  $("editor").classList.add("hidden");
+  $("step1").classList.remove("hidden");
   if (typeof window.updateHubButton === "function") window.updateHubButton();
 }
 
@@ -1010,7 +954,6 @@ function attachBoxInteraction(boxEl, cropObj) {
   boxEl.addEventListener("pointerdown", (e) => {
     e.stopPropagation();
     const overlay = $("cropOverlay");
-    if (!overlay) return;
     const rect = overlay.getBoundingClientRect();
     mode = e.target.classList.contains("rs") ? "resize" : "move";
     startX = e.clientX;
@@ -1059,9 +1002,7 @@ function initCropControls() {
     });
     splitBar.addEventListener("pointermove", (e) => {
       if (!draggingSplit) return;
-      const overlay = $("cropOverlay");
-      if (!overlay) return;
-      const rect = overlay.getBoundingClientRect();
+      const rect = $("cropOverlay").getBoundingClientRect();
       setSplitRatio((e.clientY - rect.top) / rect.height);
     });
     splitBar.addEventListener("pointerup", () => { draggingSplit = false; });
@@ -1158,7 +1099,7 @@ function initTimeline() {
   if ($("playBtn")) {
     $("playBtn").onclick = () => {
       const v = $("videoEl");
-      if (!v || !v.src) return;
+      if (!v.src) return;
       if (v.paused) {
         v.play().catch(() => {});
         $("playBtn").textContent = "⏸ Pausar";
@@ -1186,9 +1127,10 @@ function renderHeatmap(scores) {
   });
 }
 
+/* Regra solicitada: Se pedir 5 vídeos gera APENAS 5, se pedir 10 gera APENAS 10, se pedir melhores momentos gera APENAS 10 */
 async function analyzeMoments() {
   const videoEl = $("videoEl");
-  if ((!state.file && !state.videoUrl) || !videoEl || !videoEl.src) {
+  if ((!state.file && !state.videoUrl) || !videoEl.src) {
     alert("Envie um vídeo primeiro.");
     return;
   }
@@ -1196,16 +1138,15 @@ async function analyzeMoments() {
   applyLoadedDuration(videoEl);
 
   const btn = $("analyzeBtn");
-  if (btn) {
-    btn.disabled = true;
-    btn.textContent = "⏳ Analisando...";
-  }
+  btn.disabled = true;
+  btn.textContent = "⏳ Analisando...";
 
   const startSec = state.segStart || 0;
   const maxDur = state.duration || 60;
   const endSec = Math.max(startSec + 10, Math.min(maxDur, state.segEnd || maxDur));
   const clipLen = (typeof window.HUB !== "undefined" && window.HUB.duracao) ? window.HUB.duracao : 30;
-
+  
+  // Limite exato de clipes com base no plano ou pedido (5, 10 ou 10)
   let clipTargetCount = 10;
   if (typeof window.HUB !== "undefined" && window.HUB.plano === "pack5") {
     clipTargetCount = 5;
@@ -1247,9 +1188,6 @@ async function analyzeMoments() {
     audioEnvelope = null;
   }
 
-  const fallbackTitles = typeof VIRAL_TITLES !== "undefined" && VIRAL_TITLES.length ? VIRAL_TITLES : ["JOGADA INSANA! 🔥", "CLUTCH IMPOSSÍVEL!"];
-  const fallbackTags = typeof VIRAL_HASHTAGS !== "undefined" && VIRAL_HASHTAGS.length ? VIRAL_HASHTAGS : ["#cortes #viral #gaming"];
-
   const candidates = [];
   for (let t = startSec; t + clipLen <= endSec; t += step) {
     let audioPeak = 0;
@@ -1281,8 +1219,8 @@ async function analyzeMoments() {
       start: t,
       end: Math.min(maxDur, t + clipLen),
       score,
-      viral_title: fallbackTitles[candidates.length % fallbackTitles.length],
-      hashtags: fallbackTags[candidates.length % fallbackTags.length].split(" "),
+      viral_title: VIRAL_TITLES[candidates.length % VIRAL_TITLES.length],
+      hashtags: VIRAL_HASHTAGS[candidates.length % VIRAL_HASHTAGS.length].split(" "),
       signals: { audio_peak: audioPeak, motion, intensity },
       thumb: null
     });
@@ -1306,15 +1244,13 @@ async function analyzeMoments() {
     selectClip(topClips[0]);
   }
 
-  if (btn) {
-    btn.disabled = false;
-    btn.textContent = "🧠 Analisar melhores momentos";
-  }
+  btn.disabled = false;
+  btn.textContent = "🧠 Analisar melhores momentos";
 }
 
 function selectClip(clip) {
   state.activeClip = clip;
-  if ($("videoEl")) $("videoEl").currentTime = clip.start;
+  $("videoEl").currentTime = clip.start;
   updateTimeline();
 }
 
@@ -1346,36 +1282,30 @@ function openClipPreviewModal(clip) {
 
   document.body.appendChild(modal);
   const mainVid = $("videoEl");
-  const prevMainTime = mainVid ? (mainVid.currentTime || 0) : 0;
-  const wasPaused = mainVid ? mainVid.paused : true;
+  const prevMainTime = mainVid.currentTime || 0;
+  const wasPaused = mainVid.paused;
   const vCanvas = modal.querySelector("#modalVerticalCanvas");
 
-  if (mainVid) {
-    mainVid.currentTime = startSec;
-    mainVid.play().catch(() => {});
-  }
+  mainVid.currentTime = startSec;
+  mainVid.play().catch(() => {});
 
   let rafId = 0;
   const renderModalLoop = (ts) => {
     if (!document.getElementById("clipPreviewModal")) return;
-    if (mainVid && mainVid.currentTime >= endSec) {
+    if (mainVid.currentTime >= endSec) {
       mainVid.currentTime = startSec;
       mainVid.play().catch(() => {});
     }
-    if (mainVid && vCanvas) {
-      drawFrameToCanvas(mainVid, vCanvas, (ts || 0) / 1000, false);
-    }
+    drawFrameToCanvas(mainVid, vCanvas, (ts || 0) / 1000, false);
     rafId = requestAnimationFrame(renderModalLoop);
   };
   rafId = requestAnimationFrame(renderModalLoop);
 
   const closeModal = () => {
     if (rafId) cancelAnimationFrame(rafId);
-    if (mainVid) {
-      mainVid.pause();
-      mainVid.currentTime = prevMainTime;
-      if (!wasPaused) mainVid.play().catch(() => {});
-    }
+    mainVid.pause();
+    mainVid.currentTime = prevMainTime;
+    if (!wasPaused) mainVid.play().catch(() => {});
     modal.remove();
   };
 
@@ -1384,10 +1314,8 @@ function openClipPreviewModal(clip) {
     if (e.target === modal) closeModal();
   });
   modal.querySelector("#modalLoopBtn").onclick = () => {
-    if (mainVid) {
-      mainVid.currentTime = startSec;
-      mainVid.play().catch(() => {});
-    }
+    mainVid.currentTime = startSec;
+    mainVid.play().catch(() => {});
   };
   modal.querySelector("#modalDownloadClipBtn").onclick = async () => {
     closeModal();
@@ -1405,6 +1333,7 @@ function getSelectedExportFormatInfo() {
   return { mode, tierKey, isAvi, fps, ext };
 }
 
+/* Regra corrigida: Autorização e desconto obrigatórios ao baixar individualmente ou em lote */
 async function exportAndDownloadClip(clip) {
   if (typeof window.authorizeClipDownload === "function") {
     const allowed = await window.authorizeClipDownload(clip, 1);
@@ -1425,7 +1354,7 @@ async function exportAndDownloadClip(clip) {
 
 async function exportAndDownloadCurrent() {
   const videoEl = $("videoEl");
-  if ((!state.file && !state.videoUrl) || !videoEl || !videoEl.src) {
+  if ((!state.file && !state.videoUrl) || !videoEl.src) {
     alert("Envie um vídeo primeiro.");
     return;
   }
@@ -1561,13 +1490,12 @@ function exportSrt() {
     return `${hh}:${mm}:${ss},${String(ms).padStart(3, "0")}`;
   };
 
-  const srt = validCaps
-    .map((c, idx) => `${idx + 1}\n${toSrtTime(c.start)} --> ${toSrtTime(c.end)}\n${c.text}\n`)
-    .join("\n");
+  const srt = validCaps.map((c, idx) => `${idx + 1}\n${toSrtTime(c.start)} --> ${toSrtTime(c.end)}\n${c.text}\n`).join("\n");
   const blob = new Blob([srt], { type: "text/srt;charset=utf-8" });
-  const url = URL.createObjectURL(blob);
-  triggerBlobDownload(url, "clipfactory_legendas.srt");
-  setTimeout(() => URL.revokeObjectURL(url), 60000);
+  const a = document.createElement("a");
+  a.href = URL.createObjectURL(blob);
+  a.download = "clipfactory_legendas.srt";
+  a.click();
 }
 
 async function generateAutomaticCaptionsFromAudio() {
@@ -1650,7 +1578,7 @@ function startBrowserSpeechCaptioning() {
 function initCaptions() {
   if ($("addCapBtn")) {
     $("addCapBtn").onclick = () => {
-      const t = Math.floor((($("videoEl")?.currentTime) || 0) * 10) / 10;
+      const t = Math.floor(($("videoEl").currentTime || 0) * 10) / 10;
       state.captions.push({ start: t, end: t + 4, text: "" });
       renderCaptionList();
     };
@@ -1860,7 +1788,7 @@ function drawFrameToCanvas(videoEl, canvas, nowSec, showSplitGuide = false) {
   ctx.fillStyle = "#030705";
   ctx.fillRect(0, 0, W, H);
 
-  if (videoEl && videoEl.readyState >= 2) {
+  if (videoEl.readyState >= 2) {
     if (state.layout === "cam_only") {
       drawAspectFillCrop(ctx, videoEl, state.cropCam, 0, 0, W, H);
     } else if (state.layout === "game_only") {
@@ -1901,13 +1829,16 @@ function drawFrameToCanvas(videoEl, canvas, nowSec, showSplitGuide = false) {
     }
   }
 
+  // Desenha Barrinha Social
   drawSocialBar(ctx, nowSec);
 
+  // Desenha Gancho Visual
   if (state.hook.enabled && state.hook.text && state.hook.text.trim()) {
     drawStyledText(ctx, state.hook.text, state.hook.x, state.hook.y, +($("hookSz")?.value) || 64, state.hook, nowSec);
   }
 
-  const activeCue = getActiveCaption(videoEl ? (videoEl.currentTime || 0) : 0);
+  // Desenha Legendas
+  const activeCue = getActiveCaption(videoEl.currentTime || 0);
   if (activeCue && activeCue.text && activeCue.text.trim()) {
     drawStyledText(ctx, activeCue.text, state.capStyle.x, state.capStyle.y, +($("fontSz")?.value) || 48, state.capStyle, nowSec);
   }
@@ -1990,7 +1921,7 @@ const TIER_MAP = {
 
 async function exportVerticalCut(opts = {}) {
   const videoEl = $("videoEl");
-  if ((!state.file && !state.videoUrl) || !videoEl || !videoEl.src) {
+  if ((!state.file && !state.videoUrl) || !videoEl.src) {
     alert("Envie um vídeo primeiro.");
     return;
   }
@@ -2256,7 +2187,7 @@ window.addEventListener("DOMContentLoaded", () => {
   startPreviewLoop();
 
   if ($("drop")) {
-    $("drop").onclick = () => $("fileInput")?.click();
+    $("drop").onclick = () => $("fileInput").click();
     $("drop").ondragover = (e) => { e.preventDefault(); };
     $("drop").ondrop = (e) => {
       e.preventDefault();

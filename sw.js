@@ -1,10 +1,11 @@
 "use strict";
 
-const CACHE_NAME = "clipfactory-pwa-v0.030";
+const CACHE_NAME = "clipfactory-pwa-v0.031";
 const CORE_ASSETS = [
   "./",
   "./index.html",
   "./login.html",
+  "./redes.html",
   "./editor.html",
   "./presets.js",
   "./app.js",
@@ -41,23 +42,8 @@ self.addEventListener("fetch", (event) => {
   const url = new URL(event.request.url);
   if (url.origin !== self.location.origin) return;
 
-  if (url.pathname.endsWith("/version.json") || url.pathname.endsWith("version.json")) {
+  if (url.pathname.endsWith("/version.json")) {
     event.respondWith(fetch(event.request).catch(() => caches.match(event.request)));
-    return;
-  }
-
-  if (/\.(js|html|css)$/.test(url.pathname)) {
-    event.respondWith(
-      fetch(event.request, { cache: "no-store" })
-        .then((response) => {
-          if (response && response.status === 200) {
-            const clone = response.clone();
-            caches.open(CACHE_NAME).then((cache) => cache.put(event.request, clone)).catch(() => {});
-          }
-          return response;
-        })
-        .catch(() => caches.match(event.request))
-    );
     return;
   }
 
@@ -72,10 +58,4 @@ self.addEventListener("fetch", (event) => {
       })
       .catch(() => caches.match(event.request))
   );
-});
-
-self.addEventListener("message", (event) => {
-  if (event.data && event.data.type === "SKIP_WAITING") {
-    self.skipWaiting();
-  }
 });

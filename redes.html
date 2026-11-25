@@ -1,0 +1,109 @@
+<!DOCTYPE html>
+<html lang="pt-BR">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
+<title>ClipFactory — Vincular Redes Sociais</title>
+<link rel="manifest" href="./manifest.json">
+<link rel="icon" type="image/png" sizes="192x192" href="./icon-192.png">
+<meta name="theme-color" content="#07140e">
+<style>
+:root{
+  --bg:#030705;--bg2:#07140e;--panel:rgba(8,22,15,.94);--border:rgba(34,197,94,.24);--border2:rgba(74,222,128,.58);
+  --txt:#e9fff2;--muted:#84a893;--accent:#22c55e;--btn-g1:#0f5132;--btn-g2:#146c43;--btn-g-hover:#198754;
+}
+*{box-sizing:border-box;margin:0;padding:0}
+body{
+  min-height:100vh;background:linear-gradient(180deg, var(--bg2), var(--bg));
+  color:var(--txt);font-family:system-ui,-apple-system,sans-serif;padding:24px 16px;display:flex;justify-content:center;align-items:center;
+}
+.container{width:100%;max-width:540px;background:var(--panel);border:1px solid var(--border);border-radius:20px;padding:24px;backdrop-filter:blur(12px)}
+h1{font-size:22px;color:var(--accent);margin-bottom:6px;text-align:center}
+p.desc{font-size:13px;color:var(--muted);text-align:center;margin-bottom:20px}
+.net-card{display:flex;align-items:center;justify-content:space-between;background:rgba(3,10,7,.8);border:1px solid var(--border);padding:14px;border-radius:14px;margin-bottom:12px}
+.net-info{display:flex;align-items:center;gap:12px}
+.net-icon{font-size:24px}
+.net-name{font-weight:800;font-size:14px}
+.net-status{font-size:11px;color:var(--muted)}
+button{background:linear-gradient(135deg,var(--btn-g2),var(--btn-g1));color:#fff;border:1px solid var(--border2);border-radius:10px;padding:8px 14px;font-size:12px;font-weight:800;cursor:pointer}
+button.ghost{background:rgba(12,34,23,.82);border-color:var(--border);color:#bbf7d0}
+button.connected{background:#166534;border-color:#22c55e}
+.actions{display:flex;gap:12px;margin-top:24px}
+.actions button{flex:1;padding:12px;font-size:14px}
+#appVersion{position:fixed;right:14px;bottom:10px;font-size:11px;font-weight:800;color:#86efac;background:rgba(5,16,10,.88);border:1px solid var(--border);padding:4px 10px;border-radius:99px}
+</style>
+</head>
+<body>
+<div class="container">
+  <h1>Vincular Redes Sociais</h1>
+  <p class="desc">Conecte suas contas para enviar os vídeos diretamente sem precisar baixar.</p>
+  
+  <div id="netList">
+    <div class="net-card">
+      <div class="net-info"><span class="net-icon">▶</span><div><div class="net-name">YouTube</div><div class="net-status" id="st_youtube">Não conectado</div></div></div>
+      <button id="btn_youtube" onclick="toggleConnect('youtube')">Conectar</button>
+    </div>
+    <div class="net-card">
+      <div class="net-info"><span class="net-icon">🎵</span><div><div class="net-name">TikTok</div><div class="net-status" id="st_tiktok">Não conectado</div></div></div>
+      <button id="btn_tiktok" onclick="toggleConnect('tiktok')">Conectar</button>
+    </div>
+    <div class="net-card">
+      <div class="net-info"><span class="net-icon">📸</span><div><div class="net-name">Instagram</div><div class="net-status" id="st_instagram">Não conectado</div></div></div>
+      <button id="btn_instagram" onclick="toggleConnect('instagram')">Conectar</button>
+    </div>
+    <div class="net-card">
+      <div class="net-info"><span class="net-icon">👍</span><div><div class="net-name">Facebook</div><div class="net-status" id="st_facebook">Não conectado</div></div></div>
+      <button id="btn_facebook" onclick="toggleConnect('facebook')">Conectar</button>
+    </div>
+    <div class="net-card">
+      <div class="net-info"><span class="net-icon">⚡</span><div><div class="net-name">Kwai</div><div class="net-status" id="st_kwai">Não conectado</div></div></div>
+      <button id="btn_kwai" onclick="toggleConnect('kwai')">Conectar</button>
+    </div>
+  </div>
+
+  <div class="actions">
+    <button class="ghost" id="skipBtn">Pular esta etapa</button>
+    <button id="continueBtn">Continuar para o editor ➔</button>
+  </div>
+</div>
+<div id="appVersion">v0.031</div>
+
+<script>
+const APP_VERSION = "0.031";
+const urlParams = new URLSearchParams(window.location.search);
+const playerId = urlParams.get("id") || "LOCAL";
+
+let connectedNets = JSON.parse(localStorage.getItem("cf_social_nets_" + playerId) || "{}");
+
+function updateUI() {
+  ["youtube", "tiktok", "instagram", "facebook", "kwai"].forEach(net => {
+    const isConn = !!connectedNets[net];
+    const btn = document.getElementById("btn_" + net);
+    const st = document.getElementById("st_" + net);
+    if (isConn) {
+      btn.textContent = "Conectado ✓";
+      btn.className = "connected";
+      st.textContent = "Pronto para envio automático";
+      st.style.color = "#86efac";
+    } else {
+      btn.textContent = "Conectar";
+      btn.className = "";
+      st.textContent = "Não conectado";
+      st.style.color = "#84a893";
+    }
+  });
+}
+
+function toggleConnect(net) {
+  connectedNets[net] = !connectedNets[net];
+  localStorage.setItem("cf_social_nets_" + playerId, JSON.stringify(connectedNets));
+  updateUI();
+}
+
+document.getElementById("skipBtn").onclick = () => window.location.href = "./editor.html?id=" + encodeURIComponent(playerId);
+document.getElementById("continueBtn").onclick = () => window.location.href = "./editor.html?id=" + encodeURIComponent(playerId);
+
+updateUI();
+</script>
+</body>
+</html>

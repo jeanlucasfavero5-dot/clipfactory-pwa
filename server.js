@@ -6,23 +6,20 @@ import { createClient } from "@supabase/supabase-js";
 const app = express();
 const upload = multer({
   storage: multer.memoryStorage(),
-  limits: { fileSize: 150 * 1024 * 1024 } // até 150 MB
+  limits: { fileSize: 150 * 1024 * 1024 }
 });
 
 const supabaseUrl = process.env.SUPABASE_URL;
 const supabaseServiceKey = process.env.SUPABASE_SERVICE_ROLE_KEY;
 
-const supabase =
-  supabaseUrl && supabaseServiceKey
-    ? createClient(supabaseUrl, supabaseServiceKey)
-    : null;
+const supabase = (supabaseUrl && supabaseServiceKey)
+  ? createClient(supabaseUrl, supabaseServiceKey)
+  : null;
 
-app.use(
-  cors({
-    origin: process.env.ALLOWED_ORIGIN || "*",
-    methods: ["GET", "POST", "OPTIONS"]
-  })
-);
+app.use(cors({
+  origin: process.env.ALLOWED_ORIGIN || "*",
+  methods: ["GET", "POST", "OPTIONS"]
+}));
 app.use(express.json());
 
 function isMp4File(file) {
@@ -37,10 +34,6 @@ function isTokenExpiredOrExpiring(expiresAt, bufferSec = 120) {
   return Date.now() + bufferSec * 1000 >= expMs;
 }
 
-/**
- * Renova o access_token caso esteja expirado/a vencer e atualiza a tabela conexoes_sociais.
- * Preencha os endpoints OAuth de cada provedor quando configurar as credenciais.
- */
 async function ensureValidConnection(conn) {
   if (!conn.access_token && conn.provedor !== "kwai") {
     throw new Error(`Token ausente para ${conn.provedor}`);
@@ -82,7 +75,6 @@ async function ensureValidConnection(conn) {
       grant_type: "refresh_token"
     });
   } else if (conn.provedor === "instagram" || conn.provedor === "facebook") {
-    // Meta long-lived / refresh flow conforme app configurado
     const params = new URLSearchParams({
       grant_type: "fb_exchange_token",
       client_id: process.env.META_APP_ID || "",
@@ -140,9 +132,6 @@ async function ensureValidConnection(conn) {
   };
 }
 
-/**
- * YouTube Data API v3 - Resumable upload de vídeo MP4
- */
 async function publishToYouTube(conn, file, meta) {
   const active = await ensureValidConnection(conn);
 
@@ -159,7 +148,7 @@ async function publishToYouTube(conn, file, meta) {
     snippet: {
       title: String(meta.title || "Corte ClipFactory").slice(0, 100),
       description: `${meta.title || ""} ${meta.hashtags || ""}`.trim().slice(0, 4900),
-      categoryId: "20" // Gaming
+      categoryId: "20"
     },
     status: {
       privacyStatus: "public",
@@ -211,9 +200,6 @@ async function publishToYouTube(conn, file, meta) {
   };
 }
 
-/**
- * TikTok Content Posting API - Direct Post (FILE_UPLOAD)
- */
 async function publishToTikTok(conn, file, meta) {
   const active = await ensureValidConnection(conn);
 
@@ -283,10 +269,6 @@ async function publishToTikTok(conn, file, meta) {
   };
 }
 
-/**
- * Meta Graph API - Instagram Reels
- * Exige IG_USER_ID e vídeo acessível por URL pública ou fluxo de upload Meta.
- */
 async function publishToInstagram(conn, file, meta) {
   const active = await ensureValidConnection(conn);
 
@@ -300,7 +282,7 @@ async function publishToInstagram(conn, file, meta) {
   }
 
   const igUserId = meta.igUserId || process.env.META_IG_USER_ID;
-  const videoUrl = meta.videoUrl; // URL pública temporária do MP4 se exigido pela Graph API
+  const videoUrl = meta.videoUrl;
 
   if (!igUserId || !videoUrl) {
     throw new Error("Instagram exige igUserId e videoUrl pública acessível pela Meta Graph API");
@@ -346,9 +328,6 @@ async function publishToInstagram(conn, file, meta) {
   };
 }
 
-/**
- * Meta Graph API - Facebook Page Video
- */
 async function publishToFacebook(conn, file, meta) {
   const active = await ensureValidConnection(conn);
 
@@ -390,10 +369,6 @@ async function publishToFacebook(conn, file, meta) {
   };
 }
 
-/**
- * Kwai: sem API pública aberta padrão para envio direto de terceiros;
- * retorna share_ready para o PWA acionar o compartilhamento nativo do MP4.
- */
 async function publishToKwai(conn) {
   return {
     provider: "kwai",

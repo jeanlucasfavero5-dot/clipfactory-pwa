@@ -1,10 +1,8 @@
 "use strict";
 
-// Configurações do ClipFactory
 const API_RENDER_URL = "https://clipfactory-serv.onrender.com";
 const SUPABASE_URL = "https://ipqjeacdfiomcxfuixdj.supabase.co";
 
-// Estado da aplicação
 let currentUser = null;
 let userDiamonds = 0;
 let currentClips = [];
@@ -13,10 +11,12 @@ let userConnections = [];
 
 const $ = (id) => document.getElementById(id);
 
-// Inicialização
 document.addEventListener("DOMContentLoaded", async () => {
   loadStoredUser();
   setupEventListeners();
+  if ('serviceWorker' in navigator) {
+    navigator.serviceWorker.register('./sw.js').catch(err => console.log('SW Registration Failed', err));
+  }
 });
 
 function loadStoredUser() {
@@ -24,12 +24,15 @@ function loadStoredUser() {
   if (saved) {
     try {
       currentUser = JSON.parse(saved);
-      $("userNick").textContent = currentUser.nick || currentUser.id_jogador;
+      if (currentUser && currentUser.nick) {
+        $("userNick").textContent = currentUser.nick;
+      } else if (currentUser && currentUser.id_jogador) {
+        $("userNick").textContent = currentUser.id_jogador;
+      }
     } catch (_) {
       currentUser = { id_jogador: "963487998", nick: "ROCKY" };
     }
   } else {
-    // Usuário padrão de testes se não houver login prévio
     currentUser = { id_jogador: "963487998", nick: "ROCKY" };
   }
   fetchUserData();
@@ -38,17 +41,16 @@ function loadStoredUser() {
 async function fetchUserData() {
   if (!currentUser || !currentUser.id_jogador) return;
   
-  // Buscar diamantes do jogador via Supabase REST (carteira_diamantes ou usuarios)
   try {
     const res = await fetch(`${SUPABASE_URL}/rest/v1/carteira_diamantes?id_jogador=eq.${currentUser.id_jogador}&select=saldo`, {
       headers: { "apikey": "public-anon-key-placeholder" }
     });
     if (res.ok) {
       const data = await res.json();
-      if (data && data[0]) {
-        userDiamonds = data[0].saldo || 0;
+      if (data && data[0] && typeof data[0].saldo === 'number') {
+        userDiamonds = data[0].saldo;
       } else {
-        userDiamonds = 250; // valor padrão para testes
+        userDiamonds = 250;
       }
     } else {
       userDiamonds = 250;
@@ -85,7 +87,6 @@ async function fetchSocialConnections() {
 }
 
 function setupEventListeners() {
-  // Arraste e seleção de arquivos
   const dropZone = $("dropZone");
   const fileInput = $("fileInput");
 
@@ -178,7 +179,6 @@ window.previewClip = function(idx) {
   }
 };
 
-// Abertura da tela de Envio (Apenas 1 clipe por vez)
 window.openSendModalForClip = async function(idx) {
   selectedClipForSend = currentClips[idx];
   if (!selectedClipForSend) return;
@@ -222,7 +222,6 @@ window.openSendModalForClip = async function(idx) {
   $("sendModal").classList.add("active");
 };
 
-// Modal de Gerenciamento de Redes
 function openManageSocialModal() {
   const listEl = $("manageSocialList");
   listEl.innerHTML = "";
@@ -244,7 +243,7 @@ function openManageSocialModal() {
     item.innerHTML = `
       <div>
         <b>${p.name}</b>
-        <div style="font-size:11px; color: var(--muted);">${isConn ? conn.conta_nome || 'Conectado' : 'Desconectado'}</div>
+        <div style="font-size:11px; color: var(--muted);">${isConn ? (conn.conta_nome || 'Conectado') : 'Desconectado'}</div>
       </div>
       <button class="btn ${isConn ? 'btn-secondary' : ''}" style="width:auto; padding:6px 12px; font-size:12px;" onclick="toggleSocialConn('${p.id}', ${isConn})">
         ${isConn ? 'Desconectar' : 'Conectar'}
@@ -260,7 +259,6 @@ window.toggleSocialConn = function(provedor, currentlyConnected) {
   alert(`Fluxo OAuth para ${provedor}: Redirecionando para autorização...`);
 };
 
-// Execução de Envio com Cobrança de 50 Diamantes
 async function executeClipSend() {
   if (userDiamonds < 50) {
     alert("Saldo insuficiente! Você precisa de 50 diamantes para enviar este vídeo.");
@@ -278,16 +276,13 @@ async function executeClipSend() {
   const finalTitle = $("clipTitleInput").value.trim() || selectedClipForSend.title;
   const finalHashtags = $("clipHashtagsInput").value.trim();
 
-  // Exibir Carregamento
   $("sendFormContent").style.display = "none";
   $("sendLoader").style.display = "flex";
 
-  // Preparar arquivo simulado ou real
   const fileInput = $("fileInput");
   let fileToSend = fileInput.files[0];
 
   if (!fileToSend) {
-    // Criar MP4 fictício se testando por link
     const dummyBlob = new Blob(["mp4-video-data"], { type: "video/mp4" });
     fileToSend = new File([dummyBlob], "clip.mp4", { type: "video/mp4" });
   }
@@ -308,14 +303,9 @@ async function executeClipSend() {
     const data = await res.json();
 
     if (res.ok && data.ok) {
-      // Descontar 50 diamantes
       userDiamonds -= 50;
       $("userDiamonds").textContent = userDiamonds;
-
-      alert(`✅ Vídeo "${finalTitle}" enviado com sucesso!
-50 Diamantes foram debitados.`);
-      
-      // Fechar modal automaticamente após sucesso
+      alert(`✅ Vídeo "${finalTitle}" enviado com sucesso!\n50 Diamantes foram debitados.`);
       $("sendModal").classList.remove("active");
     } else {
       alert(`⚠️ Erro ao enviar clipe: ${data.error || "Falha no servidor"}`);
@@ -323,7 +313,7 @@ async function executeClipSend() {
       $("sendLoader").style.display = "none";
     }
   } catch (err) {
-    alert(` Erro de rede ou servidor Render offline: ${err.message}`);
+    alert(`Erro de rede ou servidor Render offline: ${err.message}`);
     $("sendFormContent").style.display = "block";
     $("sendLoader").style.display = "none";
   }

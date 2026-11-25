@@ -262,8 +262,6 @@ async function consumeOneVideoCreditForDownload() {
     if (HUB.extraCredits.tableAvailable) {
       try {
         const sb = getSupabase();
-        // Reescreve a partir do valor atual no banco para não sobrescrever
-        // crédito comprado em outro dispositivo com valor antigo em cache.
         const { data: fresh } = await sb
           .from("creditos_videos")
           .select("videos_restantes")

@@ -108,10 +108,6 @@ function fixWebmBlobDurationFallback(blob, durationSec) {
     const durationUnits = (safeSec * 1e9) / scaleNs;
     let patched = false;
 
-    // O elemento Duration (0x4489) fica dentro de Segment > Info, sempre perto
-    // do início do arquivo. Corrigir APENAS a primeira ocorrência e parar —
-    // aplicar em todo 0x44 0x89 encontrado corrompe clusters adiante no arquivo
-    // (era isso que gerava vídeos que não abriam).
     const scanLimit = Math.min(bytes.length - 12, 4096);
     for (let i = 0; i < scanLimit; i++) {
       if (bytes[i] === 0x44 && bytes[i + 1] === 0x89) {
@@ -155,11 +151,6 @@ function fixWebmBlobDurationFallback(blob, durationSec) {
 }
 
 function fixWebmBlobDuration(blob, durationSec) {
-  // Corrigir apenas o float de Duration não basta: editores (CapCut, InShot,
-  // Kinemaster…) leem a duração pelo Cues/SeekHead do container — sem eles
-  // o app de edição enxerga só os primeiros segundos (ex.: 7s de um vídeo de 30s)
-  // enquanto players simples transmitem até o fim. O ts-ebml faz o remux
-  // completo do cabeçalho: Duration correta + tabela de Cues + SeekHead.
   const EBMLlib = (typeof window !== "undefined") ? window.EBML : null;
   if (!EBMLlib || !EBMLlib.tools || typeof EBMLlib.tools.makeMetadataSeekable !== "function") {
     return fixWebmBlobDurationFallback(blob, durationSec);
@@ -173,8 +164,6 @@ function fixWebmBlobDuration(blob, durationSec) {
       elms.forEach((elm) => reader.read(elm));
       reader.stop();
 
-      // Duração medida durante a gravação (ticks de timestampScale); se o
-      // gravador não reportou nada, usa a duração esperada do trecho.
       let duration = Number(reader.duration) || 0;
       if (duration <= 0) {
         const scale = Number(reader.timestampScale) || 1000000;
@@ -595,8 +584,8 @@ function attachVideoMetadataHandlers(videoEl, labelText) {
   videoEl.load();
   const onMetaOrDur = () => {
     applyLoadedDuration(videoEl);
-    updateCropBoxUI();
-    updateTimelineUI();
+    positionBoxes();
+    updateTimeline();
   };
   videoEl.onloadedmetadata = onMetaOrDur;
   videoEl.ondurationchange = onMetaOrDur;
@@ -605,7 +594,7 @@ function attachVideoMetadataHandlers(videoEl, labelText) {
     if (!state.duration && videoEl.duration > 0) {
       applyLoadedDuration(videoEl);
     }
-    updateTimelineUI();
+    updateTimeline();
   };
   if ($("step1")) $("step1").classList.add("hidden");
   if ($("editor")) $("editor").classList.remove("hidden");
@@ -708,27 +697,6 @@ async function loadVideoFromUrl(rawUrl) {
 }
 
 function initSourceAndHookEnhancements() {
-  const tabLocal = $("tabLocalVideo");
-  const tabLink = $("tabLinkVideo");
-  const localPanel = $("localSourcePanel");
-  const linkPanel = $("linkSourcePanel");
-
-  if (tabLocal && tabLink && localPanel && linkPanel) {
-    tabLocal.onclick = () => {
-      tabLocal.classList.add("active");
-      tabLink.classList.remove("active");
-      localPanel.classList.remove("hidden");
-      linkPanel.classList.add("hidden");
-    };
-    tabLink.onclick = () => {
-      tabLink.classList.add("active");
-      tabLocal.classList.remove("active");
-      linkPanel.classList.remove("hidden");
-      localPanel.classList.add("hidden");
-      if ($("step1UrlInput")) $("step1UrlInput").focus();
-    };
-  }
-
   const getRangeMinutes = (startId, endId, fullIfShorterId) => {
     const fullIfShorter = $(fullIfShorterId) ? !!$(fullIfShorterId).checked : true;
     const rawStart = parseFloat($(startId)?.value);
@@ -799,7 +767,6 @@ function initSourceAndHookEnhancements() {
       setTimeout(() => URL.revokeObjectURL(bUrl), 120000);
       setLinkStatusMessage("Vídeo enviado para a pasta Downloads do dispositivo!", "ok");
     } catch (_) {
-      // Dispara link direto na pasta de downloads mesmo quando o servidor exige navegação direta
       triggerBlobDownload(targetUrl, fname);
       setLinkStatusMessage("Solicitação de download enviada para o navegador (pasta Downloads).", "ok");
     }
@@ -832,16 +799,6 @@ function initSourceAndHookEnhancements() {
       const rangeCfg = getRangeMinutes("dlLinkStartMin", "dlLinkEndMin", "dlLinkFullIfShorter");
       const chosenUrl = ($("dlLinkUrlInput")?.value || $("step1UrlInput")?.value || state.videoUrl || "").trim();
       await downloadFromLinkOrCurrent(chosenUrl, rangeCfg, false);
-    };
-  }
-
-    if ($("editorQuickUrlBtn") && $("editorQuickUrlInput")) {
-    $("editorQuickUrlBtn").onclick = () => loadVideoFromUrl($("editorQuickUrlInput").value);
-    $("editorQuickUrlInput").onkeydown = (e) => {
-      if (e.key === "Enter") {
-        e.preventDefault();
-        loadVideoFromUrl($("editorQuickUrlInput").value);
-      }
     };
   }
 
@@ -1020,13 +977,6 @@ function initCropControls() {
     };
   }
 
-  if ($("splitUpBtn")) {
-    $("splitUpBtn").onclick = () => setSplitRatio(state.splitRatio - 0.05);
-  }
-  if ($("splitDownBtn")) {
-    $("splitDownBtn").onclick = () => setSplitRatio(state.splitRatio + 0.05);
-  }
-
   window.addEventListener("resize", positionBoxes);
 }
 
@@ -1156,7 +1106,7 @@ async function analyzeMoments() {
 
   let audioEnvelope = null;
   try {
-    if (state.file.size <= 140 * 1024 * 1024) {
+    if (state.file && state.file.size <= 140 * 1024 * 1024) {
       const arrayBuf = await state.file.arrayBuffer();
       const AudioCtx = window.AudioContext || window.webkitAudioContext;
       if (AudioCtx) {
@@ -1331,7 +1281,6 @@ function getSelectedExportFormatInfo() {
 }
 
 async function exportAndDownloadClip(clip) {
-  // Exporta primeiro: se a renderização falhar, nada é cobrado.
   const result = await exportVerticalCut({
     startOverride: clip.start,
     endOverride: clip.end,
@@ -1340,7 +1289,6 @@ async function exportAndDownloadClip(clip) {
   });
   if (!result || !result.url) return;
 
-  // Desconto acontece somente quando o arquivo ficou pronto (download real).
   if (typeof window.authorizeClipDownload === "function") {
     const allowed = await window.authorizeClipDownload(clip, 1);
     if (!allowed) return;
@@ -1494,7 +1442,6 @@ function exportSrt() {
   a.download = "clipfactory_legendas.srt";
   a.click();
 }
-
 
 async function generateAutomaticCaptionsFromAudio() {
   const statusEl = $("autoCaptionStatus");
@@ -1905,7 +1852,7 @@ async function exportVerticalCut(opts = {}) {
   if (btn) btn.disabled = true;
   state.isExporting = true;
   if ($("expResult")) $("expResult").innerHTML = "";
-    setExportLog(`Preparando exportação (${spec.w}×${spec.h} · ${spec.fps} fps)...`, 8);
+  setExportLog(`Preparando exportação (${spec.w}×${spec.h} · ${spec.fps} fps)...`, 8);
 
   let videoStream = null;
   let audioCtx = null;
@@ -1945,11 +1892,6 @@ async function exportVerticalCut(opts = {}) {
 
     combinedStream = new MediaStream(tracks);
 
-    // Gravar sempre em WebM: o remux com ts-ebml (fixWebmBlobDuration) regrava
-    // Duration + Cues + SeekHead e o arquivo abre completo em qualquer editor.
-    // NÃO usar video/mp4 do MediaRecorder: o Chrome grava MP4 fragmentado (fMP4),
-    // que players tocam inteiro mas editores (CapCut, InShot, Kinemaster) leem
-    // só o primeiro fragmento — aparece 6-7s de um clipe de 30s.
     const candidateMimeTypes = [
       "video/webm;codecs=vp9,opus",
       "video/webm;codecs=vp8,opus",
@@ -2059,9 +2001,6 @@ async function exportVerticalCut(opts = {}) {
       }
 
       videoEl.addEventListener("ended", finish, { once: true });
-      // Folga generosa: se o vídeo renderiza mais lento que tempo real (canvas
-      // pesado), o gravador continua até atingir o fim do trecho em vez de
-      // terminar no meio e cortar o vídeo.
       setTimeout(finish, Math.ceil((actualDurationSec * 2 + 6) * 1000));
     });
 
@@ -2114,8 +2053,6 @@ async function exportVerticalCut(opts = {}) {
         </div>`;
     }
 
-    // Com autoDownload === false, devolve o blob pronto para o chamador cobrar
-    // a cota/credits ANTES de entregar o arquivo (desconto garantido no download).
     if (opts.autoDownload === false) {
       return { blob: finalBlob, url, fileName: outName, durationSec: actualDurationSec };
     }

@@ -268,7 +268,6 @@ input:focus{
   padding: 10px 14px !important;
   min-height: 42px !important;
 }
-
 </style>
 
 <style id="cfBgOverride">
@@ -276,7 +275,6 @@ input:focus{
     background: linear-gradient(rgba(3, 7, 5, 0.72), rgba(3, 7, 5, 0.84)), url("./splash-bg.jpg") center center / cover fixed no-repeat !important;
   }
 </style>
-
 </head>
 <body>
 
@@ -335,52 +333,13 @@ input:focus{
   </div>
 </main>
 
-<div id="appVersion">v0.009</div>
+<div id="appVersion">v0.029</div>
 
-<script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2">async function triggerRealUpdate(btnEl, statusFn) {
-  if (btnEl) {
-    btnEl.disabled = true;
-    btnEl.textContent = "Baixando e aplicando atualização…";
-  }
-  if (statusFn) statusFn("Baixando nova versão e limpando cache antigo…", "ok");
-  try {
-    if ("serviceWorker" in navigator) {
-      const regs = await navigator.serviceWorker.getRegistrations();
-      for (const r of regs) {
-        await r.update().catch(() => {});
-        if (r.waiting) r.waiting.postMessage({ type: "SKIP_WAITING" });
-      }
-    }
-    if ("caches" in window) {
-      const keys = await caches.keys();
-      await Promise.all(keys.map(k => caches.delete(k)));
-    }
-    // Prefetch core updated files so the new version is downloaded right away
-    const coreFiles = ["./index.html", "./login.html", "./editor.html", "./app.js", "./wallet.js", "./presets.js", "./manifest.json", "./version.json"];
-    await Promise.all(coreFiles.map(u => fetch(`${u}?_upd=${Date.now()}`, { cache: "no-store" }).catch(() => null)));
-  } catch (e) {}
-
-  // If version.json specifies a downloadable zip/package URL, start download too
-  if (window.__cfPackageUrl) {
-    const dl = document.createElement("a");
-    dl.href = window.__cfPackageUrl;
-    dl.download = window.__cfPackageUrl.split("/").pop() || "clipfactory-update.zip";
-    document.body.appendChild(dl);
-    dl.click();
-    dl.remove();
-  }
-
-  const target = (latestUpdateUrl || "./index.html");
-  const sep = target.includes("?") ? "&" : "?";
-  setTimeout(() => {
-    window.location.replace(`${target}${sep}v=0.026&v=0.028&t=${Date.now()}`);
-  }, 350);
-}
-</script>
+<script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
 <script>
 "use strict";
 
-const APP_VERSION = "0.028";
+const APP_VERSION = "0.029";
 const VERSION_CHECK_URL = "./version.json";
 const SUPABASE_URL = "https://ipqjeacdfiomcxfuixdj.supabase.co";
 const SUPABASE_KEY = "sb_publishable_EWW84q_43YbOvMwB_Rua-A_X465PbLP";
@@ -401,6 +360,44 @@ if ("serviceWorker" in navigator) {
   window.addEventListener("load", () => {
     navigator.serviceWorker.register("./sw.js").catch(() => {});
   });
+}
+
+async function triggerRealUpdate(btnEl, statusFn) {
+  if (btnEl) {
+    btnEl.disabled = true;
+    btnEl.textContent = "Baixando e aplicando atualização…";
+  }
+  if (statusFn) statusFn("Baixando nova versão e limpando cache antigo…", "ok");
+  try {
+    if ("serviceWorker" in navigator) {
+      const regs = await navigator.serviceWorker.getRegistrations();
+      for (const r of regs) {
+        await r.update().catch(() => {});
+        if (r.waiting) r.waiting.postMessage({ type: "SKIP_WAITING" });
+      }
+    }
+    if ("caches" in window) {
+      const keys = await caches.keys();
+      await Promise.all(keys.map(k => caches.delete(k)));
+    }
+    const coreFiles = ["./index.html", "./login.html", "./editor.html", "./app.js", "./wallet.js", "./presets.js", "./manifest.json", "./version.json"];
+    await Promise.all(coreFiles.map(u => fetch(`${u}?_upd=${Date.now()}`, { cache: "no-store" }).catch(() => null)));
+  } catch (e) {}
+
+  if (window.__cfPackageUrl) {
+    const dl = document.createElement("a");
+    dl.href = window.__cfPackageUrl;
+    dl.download = window.__cfPackageUrl.split("/").pop() || "clipfactory-update.zip";
+    document.body.appendChild(dl);
+    dl.click();
+    dl.remove();
+  }
+
+  const target = (latestUpdateUrl || "./index.html");
+  const sep = target.includes("?") ? "&" : "?";
+  setTimeout(() => {
+    window.location.replace(`${target}${sep}v=${APP_VERSION}&t=${Date.now()}`);
+  }, 350);
 }
 
 $("togglePassBtn").addEventListener("click", () => {
@@ -440,12 +437,12 @@ async function checkForUpdates(showFeedbackIfUpToDate = false) {
     return;
   }
   try {
-    const res = await fetch(`${VERSION_CHECK_URL}?v=0.028&t=${Date.now()}`, { cache: "no-store" });
+    const res = await fetch(`${VERSION_CHECK_URL}?v=${APP_VERSION}&t=${Date.now()}`, { cache: "no-store" });
     if (!res.ok) return;
     const data = await res.json();
     if (data && data.package_url) { window.__cfPackageUrl = data.package_url; }
-      if (data && isNewerVersion(data.version, APP_VERSION)) {
-      latestUpdateUrl = data.url || "./login.html";
+    if (data && isNewerVersion(data.version, APP_VERSION)) {
+      latestUpdateUrl = data.url || "./index.html";
       $("remoteVerLabel").textContent = `v${data.version}`;
       $("updateBanner").classList.add("show");
     } else {
@@ -587,6 +584,5 @@ window.addEventListener("DOMContentLoaded", () => {
   checkForUpdates(false);
 });
 </script>
-
 </body>
 </html>

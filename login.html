@@ -33,6 +33,8 @@
 body{
   min-height:100vh;
   background:
+    linear-gradient(rgba(3, 7, 5, 0.72), rgba(3, 7, 5, 0.84)),
+    url("./splash-bg.jpg") center center / cover fixed no-repeat,
     radial-gradient(820px 440px at 80% -10%, rgba(20,108,67,.30), transparent 60%),
     radial-gradient(640px 400px at -10% 90%, rgba(15,81,50,.26), transparent 60%),
     linear-gradient(180deg, var(--bg2), var(--bg));
@@ -269,12 +271,6 @@ input:focus{
   min-height: 42px !important;
 }
 </style>
-
-<style id="cfBgOverride">
-  body {
-    background: linear-gradient(rgba(3, 7, 5, 0.72), rgba(3, 7, 5, 0.84)), url("./splash-bg.jpg") center center / cover fixed no-repeat !important;
-  }
-</style>
 </head>
 <body>
 
@@ -333,256 +329,274 @@ input:focus{
   </div>
 </main>
 
-<div id="appVersion">v0.030</div>
+<div id="appVersion">v0.031</div>
 
 <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
 <script>
 "use strict";
 
-const APP_VERSION = "0.030";
-const VERSION_CHECK_URL = "./version.json";
-const SUPABASE_URL = "https://ipqjeacdfiomcxfuixdj.supabase.co";
-const SUPABASE_KEY = "sb_publishable_EWW84q_43YbOvMwB_Rua-A_X465PbLP";
+(() => {
+  const APP_VERSION = "0.031";
+  const VERSION_CHECK_URL = "./version.json";
+  const CF_SUPABASE_URL = "https://ipqjeacdfiomcxfuixdj.supabase.co";
+  const CF_SUPABASE_KEY = "sb_publishable_EWW84q_43YbOvMwB_Rua-A_X465PbLP";
 
-const $ = id => document.getElementById(id);
-let deferredInstallPrompt = null;
-let latestUpdateUrl = null;
+  const byId = id => document.getElementById(id);
+  let deferredInstallPrompt = null;
+  let latestUpdateUrl = "./index.html";
 
-$("appVersion").textContent = "v" + APP_VERSION;
+  if (byId("appVersion")) byId("appVersion").textContent = "v" + APP_VERSION;
 
-function setStatus(msg, type = "") {
-  const box = $("statusBox");
-  box.textContent = msg;
-  box.className = type;
-}
-
-if ("serviceWorker" in navigator) {
-  window.addEventListener("load", () => {
-    navigator.serviceWorker.register("./sw.js").catch(() => {});
-  });
-}
-
-async function triggerRealUpdate(btnEl, statusFn) {
-  if (btnEl) {
-    btnEl.disabled = true;
-    btnEl.textContent = "Baixando e aplicando atualização…";
+  function setStatus(msg, type = "") {
+    const box = byId("statusBox");
+    if (!box) return;
+    box.textContent = msg;
+    box.className = type;
   }
-  if (statusFn) statusFn("Baixando nova versão e limpando cache antigo…", "ok");
-  try {
-    if ("serviceWorker" in navigator) {
-      const regs = await navigator.serviceWorker.getRegistrations();
-      for (const r of regs) {
-        await r.update().catch(() => {});
-        if (r.waiting) r.waiting.postMessage({ type: "SKIP_WAITING" });
+
+  if ("serviceWorker" in navigator) {
+    window.addEventListener("load", () => {
+      navigator.serviceWorker.register("./sw.js").catch(() => {});
+    });
+  }
+
+  async function triggerRealUpdate(btnEl, statusFn) {
+    if (btnEl) {
+      btnEl.disabled = true;
+      btnEl.textContent = "Baixando e aplicando atualização…";
+    }
+    if (statusFn) statusFn("Baixando nova versão e limpando cache antigo…", "ok");
+    try {
+      if ("serviceWorker" in navigator) {
+        const regs = await navigator.serviceWorker.getRegistrations();
+        for (const r of regs) {
+          await r.update().catch(() => {});
+          if (r.waiting) r.waiting.postMessage({ type: "SKIP_WAITING" });
+        }
       }
-    }
-    if ("caches" in window) {
-      const keys = await caches.keys();
-      await Promise.all(keys.map(k => caches.delete(k)));
-    }
-    const coreFiles = ["./index.html", "./login.html", "./editor.html", "./app.js", "./wallet.js", "./presets.js", "./manifest.json", "./version.json"];
-    await Promise.all(coreFiles.map(u => fetch(`${u}?_upd=${Date.now()}`, { cache: "no-store" }).catch(() => null)));
-  } catch (e) {}
+      if ("caches" in window) {
+        const keys = await caches.keys();
+        await Promise.all(keys.map(k => caches.delete(k)));
+      }
+      const coreFiles = ["./index.html", "./login.html", "./editor.html", "./redes.html", "./app.js", "./wallet.js", "./presets.js", "./manifest.json", "./version.json"];
+      await Promise.all(coreFiles.map(u => fetch(`${u}?_upd=${Date.now()}`, { cache: "no-store" }).catch(() => null)));
+    } catch (e) {}
 
-  if (window.__cfPackageUrl) {
-    const dl = document.createElement("a");
-    dl.href = window.__cfPackageUrl;
-    dl.download = window.__cfPackageUrl.split("/").pop() || "clipfactory-update.zip";
-    document.body.appendChild(dl);
-    dl.click();
-    dl.remove();
+    if (window.__cfPackageUrl) {
+      const dl = document.createElement("a");
+      dl.href = window.__cfPackageUrl;
+      dl.download = window.__cfPackageUrl.split("/").pop() || "clipfactory-update.zip";
+      document.body.appendChild(dl);
+      dl.click();
+      dl.remove();
+    }
+
+    const target = latestUpdateUrl || "./index.html";
+    const sep = target.includes("?") ? "&" : "?";
+    setTimeout(() => {
+      window.location.replace(`${target}${sep}v=${APP_VERSION}&t=${Date.now()}`);
+    }, 350);
   }
 
-  const target = (latestUpdateUrl || "./index.html");
-  const sep = target.includes("?") ? "&" : "?";
-  setTimeout(() => {
-    window.location.replace(`${target}${sep}v=${APP_VERSION}&t=${Date.now()}`);
-  }, 350);
-}
+  if (byId("togglePassBtn")) {
+    byId("togglePassBtn").addEventListener("click", () => {
+      const inp = byId("loginPass");
+      if (!inp) return;
+      const isPass = inp.type === "password";
+      inp.type = isPass ? "text" : "password";
+      byId("togglePassBtn").textContent = isPass ? "🙈" : "👁";
+    });
+  }
 
-$("togglePassBtn").addEventListener("click", () => {
-  const inp = $("loginPass");
-  const isPass = inp.type === "password";
-  inp.type = isPass ? "text" : "password";
-  $("togglePassBtn").textContent = isPass ? "🙈" : "👁";
-});
+  (function initSavedLogin() {
+    try {
+      const saved = localStorage.getItem("cf_saved_login_user");
+      if (saved && byId("loginUser")) {
+        byId("loginUser").value = saved;
+        if (byId("rememberChk")) byId("rememberChk").checked = true;
+      }
+    } catch (e) {}
+  })();
 
-(function initSavedLogin() {
-  try {
-    const saved = localStorage.getItem("cf_saved_login_user");
-    if (saved) {
-      $("loginUser").value = saved;
-      $("rememberChk").checked = true;
+  function isNewerVersion(remoteVer, localVer) {
+    if (!remoteVer) return false;
+    const rParts = String(remoteVer).trim().split(".").map(n => parseInt(n, 10) || 0);
+    const lParts = String(localVer).trim().split(".").map(n => parseInt(n, 10) || 0);
+    const len = Math.max(rParts.length, lParts.length);
+    for (let i = 0; i < len; i++) {
+      const a = rParts[i] || 0;
+      const b = lParts[i] || 0;
+      if (a > b) return true;
+      if (a < b) return false;
     }
-  } catch (e) {}
-})();
-
-function isNewerVersion(remoteVer, localVer) {
-  if (!remoteVer) return false;
-  const rParts = String(remoteVer).trim().split(".").map(n => parseInt(n, 10) || 0);
-  const lParts = String(localVer).trim().split(".").map(n => parseInt(n, 10) || 0);
-  const len = Math.max(rParts.length, lParts.length);
-  for (let i = 0; i < len; i++) {
-    const a = rParts[i] || 0;
-    const b = lParts[i] || 0;
-    if (a > b) return true;
-    if (a < b) return false;
+    return false;
   }
-  return false;
-}
 
-async function checkForUpdates(showFeedbackIfUpToDate = false) {
-  if (!navigator.onLine) {
-    if (showFeedbackIfUpToDate) setStatus("Sem conexão no momento para checar atualização.", "err");
-    return;
-  }
-  try {
-    const res = await fetch(`${VERSION_CHECK_URL}?v=${APP_VERSION}&t=${Date.now()}`, { cache: "no-store" });
-    if (!res.ok) return;
-    const data = await res.json();
-    if (data && data.package_url) { window.__cfPackageUrl = data.package_url; }
-    if (data && isNewerVersion(data.version, APP_VERSION)) {
-      latestUpdateUrl = data.url || "./index.html";
-      $("remoteVerLabel").textContent = `v${data.version}`;
-      $("updateBanner").classList.add("show");
-    } else {
-      $("updateBanner").classList.remove("show");
+  async function checkForUpdates(showFeedbackIfUpToDate = false) {
+    if (!navigator.onLine) {
+      if (showFeedbackIfUpToDate) setStatus("Sem conexão no momento para checar atualização.", "err");
+      return;
+    }
+    try {
+      const res = await fetch(`${VERSION_CHECK_URL}?v=${APP_VERSION}&t=${Date.now()}`, { cache: "no-store" });
+      if (!res.ok) return;
+      const data = await res.json();
+      if (data && data.package_url) { window.__cfPackageUrl = data.package_url; }
+      if (data && isNewerVersion(data.version, APP_VERSION)) {
+        latestUpdateUrl = data.url || "./index.html";
+        if (byId("remoteVerLabel")) byId("remoteVerLabel").textContent = `v${data.version}`;
+        if (byId("updateBanner")) byId("updateBanner").classList.add("show");
+      } else {
+        if (byId("updateBanner")) byId("updateBanner").classList.remove("show");
+        if (showFeedbackIfUpToDate) {
+          setStatus(`Você já está na versão mais recente (v${APP_VERSION}).`, "ok");
+        }
+      }
+    } catch (e) {
       if (showFeedbackIfUpToDate) {
-        setStatus(`Você já está na versão mais recente (v${APP_VERSION}).`, "ok");
+        setStatus("Não foi possível verificar atualização agora.", "err");
       }
     }
-  } catch (e) {
-    if (showFeedbackIfUpToDate) {
-      setStatus("Não foi possível verificar atualização agora.", "err");
-    }
-  }
-}
-
-$("checkUpdManualBtn").addEventListener("click", () => checkForUpdates(true));
-
-$("updateBtn").addEventListener("click", () => triggerRealUpdate($("updateBtn"), setStatus));
-
-window.addEventListener("beforeinstallprompt", e => {
-  e.preventDefault();
-  deferredInstallPrompt = e;
-});
-
-$("installPwaBtn").addEventListener("click", async () => {
-  if (deferredInstallPrompt) {
-    deferredInstallPrompt.prompt();
-    await deferredInstallPrompt.userChoice;
-    deferredInstallPrompt = null;
-  } else {
-    alert("Para instalar no celular: toque no menu do navegador (⋮) e escolha 'Instalar aplicativo' ou 'Adicionar à tela inicial'.");
-  }
-});
-
-$("loginForm").addEventListener("submit", async e => {
-  e.preventDefault();
-  const identifier = $("loginUser").value.trim();
-  const password = $("loginPass").value;
-  if (!identifier || !password) return;
-
-  if ($("rememberChk").checked) {
-    localStorage.setItem("cf_saved_login_user", identifier);
-  } else {
-    localStorage.removeItem("cf_saved_login_user");
   }
 
-  const btn = $("loginSubmitBtn");
-  btn.disabled = true;
-  btn.textContent = "Verificando conta…";
-  setStatus("Conectando ao Supabase…");
+  if (byId("checkUpdManualBtn")) byId("checkUpdManualBtn").addEventListener("click", () => checkForUpdates(true));
+  if (byId("updateBtn")) byId("updateBtn").addEventListener("click", () => triggerRealUpdate(byId("updateBtn"), setStatus));
 
-  try {
-    const sb = window.supabase.createClient(SUPABASE_URL, SUPABASE_KEY);
+  window.addEventListener("beforeinstallprompt", e => {
+    e.preventDefault();
+    deferredInstallPrompt = e;
+  });
 
-    if (identifier.includes("@")) {
-      const { data: authData, error: authErr } = await sb.auth.signInWithPassword({
-        email: identifier,
-        password,
-      });
-      if (!authErr && authData?.user) {
-        const playerId = authData.user.user_metadata?.id_jogador || authData.user.id;
-        const nick = authData.user.user_metadata?.nick || identifier.split("@")[0];
+  if (byId("installPwaBtn")) {
+    byId("installPwaBtn").addEventListener("click", async () => {
+      if (deferredInstallPrompt) {
+        deferredInstallPrompt.prompt();
+        await deferredInstallPrompt.userChoice.catch(() => null);
+        deferredInstallPrompt = null;
+      } else {
+        alert("Para instalar no celular: toque no menu do navegador (⋮) e escolha 'Instalar aplicativo' ou 'Adicionar à tela inicial'.");
+      }
+    });
+  }
+
+  if (byId("loginForm")) {
+    byId("loginForm").addEventListener("submit", async e => {
+      e.preventDefault();
+      const identifier = (byId("loginUser")?.value || "").trim();
+      const password = byId("loginPass")?.value || "";
+      if (!identifier || !password) return;
+
+      try {
+        if (byId("rememberChk")?.checked) {
+          localStorage.setItem("cf_saved_login_user", identifier);
+        } else {
+          localStorage.removeItem("cf_saved_login_user");
+        }
+      } catch (err) {}
+
+      const btn = byId("loginSubmitBtn");
+      if (btn) {
+        btn.disabled = true;
+        btn.textContent = "Verificando conta…";
+      }
+      setStatus("Conectando ao Supabase…");
+
+      try {
+        if (!window.supabase || typeof window.supabase.createClient !== "function") {
+          throw new Error("SDK do Supabase não carregou.");
+        }
+        const sb = window.supabase.createClient(CF_SUPABASE_URL, CF_SUPABASE_KEY);
+
+        if (identifier.includes("@")) {
+          const { data: authData, error: authErr } = await sb.auth.signInWithPassword({
+            email: identifier,
+            password,
+          });
+          if (!authErr && authData?.user) {
+            const playerId = authData.user.user_metadata?.id_jogador || authData.user.id;
+            const nick = authData.user.user_metadata?.nick || identifier.split("@")[0];
+            let diamantes = 0;
+            const wRes = await sb
+              .from("carteira_diamantes")
+              .select("diamantes")
+              .eq("id_jogador", String(playerId))
+              .maybeSingle();
+            if (!wRes.error && wRes.data) diamantes = Number(wRes.data.diamantes || 0);
+
+            sessionStorage.setItem("cf_session_user", JSON.stringify({
+              id_jogador: String(playerId),
+              nick,
+              diamantes,
+              loggedAt: Date.now(),
+            }));
+            setStatus("Login realizado! Abrindo painel…", "ok");
+            window.location.href = `./editor.html?id=${encodeURIComponent(playerId)}`;
+            return;
+          }
+        }
+
+        const byIdRes = await sb
+          .from("usuarios")
+          .select("*")
+          .eq("id_jogador", identifier)
+          .maybeSingle();
+
+        let userRow = byIdRes.data;
+        if (!userRow) {
+          const byNickRes = await sb
+            .from("usuarios")
+            .select("*")
+            .ilike("nick", identifier)
+            .maybeSingle();
+          userRow = byNickRes.data;
+        }
+
+        if (!userRow) {
+          throw new Error("Usuário ou ID não encontrado. Verifique seus dados ou crie conta no Hub.");
+        }
+
+        const storedPass = userRow.senha ?? userRow.password ?? null;
+        if (storedPass !== null && String(storedPass) !== password) {
+          throw new Error("Senha incorreta.");
+        }
+
+        const playerId = String(userRow.id_jogador);
+        const nick = String(userRow.nick || playerId);
+
         let diamantes = 0;
         const wRes = await sb
           .from("carteira_diamantes")
           .select("diamantes")
-          .eq("id_jogador", String(playerId))
+          .eq("id_jogador", playerId)
           .maybeSingle();
-        if (!wRes.error && wRes.data) diamantes = Number(wRes.data.diamantes || 0);
+        if (!wRes.error && wRes.data) {
+          diamantes = Number(wRes.data.diamantes || 0);
+        }
 
         sessionStorage.setItem("cf_session_user", JSON.stringify({
-          id_jogador: String(playerId),
+          id_jogador: playerId,
           nick,
           diamantes,
           loggedAt: Date.now(),
         }));
-        setStatus("Login realizado! Abrindo painel…", "ok");
+
+        setStatus(`Bem-vindo, ${nick}! Saldo: ${diamantes} diamantes.`, "ok");
         window.location.href = `./editor.html?id=${encodeURIComponent(playerId)}`;
-        return;
+      } catch (err) {
+        setStatus(err.message || "Falha ao entrar.", "err");
+      } finally {
+        if (btn) {
+          btn.disabled = false;
+          btn.textContent = "Entrar no aplicativo";
+        }
       }
-    }
-
-    const byId = await sb
-      .from("usuarios")
-      .select("*")
-      .eq("id_jogador", identifier)
-      .maybeSingle();
-
-    let userRow = byId.data;
-    if (!userRow) {
-      const byNick = await sb
-        .from("usuarios")
-        .select("*")
-        .ilike("nick", identifier)
-        .maybeSingle();
-      userRow = byNick.data;
-    }
-
-    if (!userRow) {
-      throw new Error("Usuário ou ID não encontrado. Verifique seus dados ou crie conta no Hub.");
-    }
-
-    const storedPass = userRow.senha ?? userRow.password ?? null;
-    if (storedPass !== null && String(storedPass) !== password) {
-      throw new Error("Senha incorreta.");
-    }
-
-    const playerId = String(userRow.id_jogador);
-    const nick = String(userRow.nick || playerId);
-
-    let diamantes = 0;
-    const wRes = await sb
-      .from("carteira_diamantes")
-      .select("diamantes")
-      .eq("id_jogador", playerId)
-      .maybeSingle();
-    if (!wRes.error && wRes.data) {
-      diamantes = Number(wRes.data.diamantes || 0);
-    }
-
-    sessionStorage.setItem("cf_session_user", JSON.stringify({
-      id_jogador: playerId,
-      nick,
-      diamantes,
-      loggedAt: Date.now(),
-    }));
-
-    setStatus(`Bem-vindo, ${nick}! Saldo: ${diamantes} diamantes.`, "ok");
-    window.location.href = `./editor.html?id=${encodeURIComponent(playerId)}`;
-  } catch (err) {
-    setStatus(err.message || "Falha ao entrar.", "err");
-  } finally {
-    btn.disabled = false;
-    btn.textContent = "Entrar no aplicativo";
+    });
   }
-});
 
-window.addEventListener("DOMContentLoaded", () => {
-  checkForUpdates(false);
-});
+  window.addEventListener("DOMContentLoaded", () => {
+    checkForUpdates(false);
+  });
+})();
 </script>
 </body>
 </html>

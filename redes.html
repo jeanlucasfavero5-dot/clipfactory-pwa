@@ -41,45 +41,50 @@ button.connected{background:#166534;border-color:#22c55e}
   <div id="netList">
     <div class="net-card">
       <div class="net-info"><span class="net-icon">▶</span><div><div class="net-name">YouTube</div><div class="net-status" id="st_youtube">Não conectado</div></div></div>
-      <button id="btn_youtube" onclick="toggleConnect('youtube')">Conectar</button>
+      <button type="button" id="btn_youtube" onclick="toggleConnect('youtube')">Conectar</button>
     </div>
     <div class="net-card">
       <div class="net-info"><span class="net-icon">🎵</span><div><div class="net-name">TikTok</div><div class="net-status" id="st_tiktok">Não conectado</div></div></div>
-      <button id="btn_tiktok" onclick="toggleConnect('tiktok')">Conectar</button>
+      <button type="button" id="btn_tiktok" onclick="toggleConnect('tiktok')">Conectar</button>
     </div>
     <div class="net-card">
       <div class="net-info"><span class="net-icon">📸</span><div><div class="net-name">Instagram</div><div class="net-status" id="st_instagram">Não conectado</div></div></div>
-      <button id="btn_instagram" onclick="toggleConnect('instagram')">Conectar</button>
+      <button type="button" id="btn_instagram" onclick="toggleConnect('instagram')">Conectar</button>
     </div>
     <div class="net-card">
       <div class="net-info"><span class="net-icon">👍</span><div><div class="net-name">Facebook</div><div class="net-status" id="st_facebook">Não conectado</div></div></div>
-      <button id="btn_facebook" onclick="toggleConnect('facebook')">Conectar</button>
+      <button type="button" id="btn_facebook" onclick="toggleConnect('facebook')">Conectar</button>
     </div>
     <div class="net-card">
       <div class="net-info"><span class="net-icon">⚡</span><div><div class="net-name">Kwai</div><div class="net-status" id="st_kwai">Não conectado</div></div></div>
-      <button id="btn_kwai" onclick="toggleConnect('kwai')">Conectar</button>
+      <button type="button" id="btn_kwai" onclick="toggleConnect('kwai')">Conectar</button>
     </div>
   </div>
 
   <div class="actions">
-    <button class="ghost" id="skipBtn">Pular esta etapa</button>
-    <button id="continueBtn">Continuar para o editor ➔</button>
+    <button type="button" class="ghost" id="skipBtn">Pular esta etapa</button>
+    <button type="button" id="continueBtn">Continuar para o editor ➔</button>
   </div>
 </div>
 <div id="appVersion">v0.031</div>
 
 <script>
-const APP_VERSION = "0.031";
+"use strict";
 const urlParams = new URLSearchParams(window.location.search);
 const playerId = urlParams.get("id") || "LOCAL";
-
-let connectedNets = JSON.parse(localStorage.getItem("cf_social_nets_" + playerId) || "{}");
+let connectedNets = {};
+try {
+  connectedNets = JSON.parse(localStorage.getItem("cf_social_nets_" + playerId) || "{}");
+} catch (e) {
+  connectedNets = {};
+}
 
 function updateUI() {
   ["youtube", "tiktok", "instagram", "facebook", "kwai"].forEach(net => {
     const isConn = !!connectedNets[net];
     const btn = document.getElementById("btn_" + net);
     const st = document.getElementById("st_" + net);
+    if (!btn || !st) return;
     if (isConn) {
       btn.textContent = "Conectado ✓";
       btn.className = "connected";
@@ -94,14 +99,20 @@ function updateUI() {
   });
 }
 
-function toggleConnect(net) {
+window.toggleConnect = function(net) {
   connectedNets[net] = !connectedNets[net];
-  localStorage.setItem("cf_social_nets_" + playerId, JSON.stringify(connectedNets));
+  try {
+    localStorage.setItem("cf_social_nets_" + playerId, JSON.stringify(connectedNets));
+  } catch (e) {}
   updateUI();
-}
+};
 
-document.getElementById("skipBtn").onclick = () => window.location.href = "./editor.html?id=" + encodeURIComponent(playerId);
-document.getElementById("continueBtn").onclick = () => window.location.href = "./editor.html?id=" + encodeURIComponent(playerId);
+document.getElementById("skipBtn").onclick = () => {
+  window.location.href = "./editor.html?id=" + encodeURIComponent(playerId);
+};
+document.getElementById("continueBtn").onclick = () => {
+  window.location.href = "./editor.html?id=" + encodeURIComponent(playerId);
+};
 
 updateUI();
 </script>

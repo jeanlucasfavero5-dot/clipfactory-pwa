@@ -502,7 +502,7 @@ document.getElementById("loginForm").addEventListener("submit", async (e) => {
       throw new Error("Serviço de autenticação indisponível no momento.");
     }
 
-    const escapedPattern = rawUser.replace(/[%_\]/g, "\$&");
+    const needle = rawUser.toLowerCase();
     let rows = [];
 
     if (/^\d+$/.test(rawUser)) {
@@ -513,33 +513,16 @@ document.getElementById("loginForm").addEventListener("submit", async (e) => {
       rows = byId.data || [];
     }
 
-    if (!rows.length && rawUser.includes("@")) {
-      const byEmail = await sb.from("usuarios").select("*").ilike("email", escapedPattern).limit(5);
-      if (byEmail.error) {
-        throw new Error("Erro Supabase (email): " + byEmail.error.message);
-      }
-      rows = byEmail.data || [];
-    }
-
     if (!rows.length) {
-      const byNick = await sb.from("usuarios").select("*").ilike("nick", escapedPattern).limit(10);
-      if (byNick.error) {
-        throw new Error("Erro Supabase (nick): " + byNick.error.message);
-      }
-      rows = byNick.data || [];
-    }
-
-    if (!rows.length) {
-      const broad = await sb.from("usuarios").select("*").limit(200);
+      const broad = await sb.from("usuarios").select("*").limit(500);
       if (broad.error) {
-        throw new Error("Erro Supabase (consulta usuarios / RLS): " + broad.error.message);
+        throw new Error("Erro Supabase (usuarios): " + broad.error.message);
       }
-      const needle = rawUser.toLowerCase();
       rows = (broad.data || []).filter(r => {
-        const idMatch = String(r.id_jogador ?? r.id ?? "").toLowerCase() === needle;
-        const nickMatch = String(r.nick ?? r.usuario ?? r.nome ?? "").trim().toLowerCase() === needle;
-        const emailMatch = String(r.email ?? "").trim().toLowerCase() === needle;
-        return idMatch || nickMatch || emailMatch;
+        const idVal = String(r.id_jogador ?? r.id ?? "").trim().toLowerCase();
+        const nickVal = String(r.nick ?? r.usuario ?? r.nome ?? "").trim().toLowerCase();
+        const emailVal = String(r.email ?? "").trim().toLowerCase();
+        return idVal === needle || nickVal === needle || emailVal === needle;
       });
     }
 

@@ -6,6 +6,7 @@ const CORE_ASSETS = [
   "./index.html",
   "./login.html",
   "./editor.html",
+  "./styles.css",
   "./presets.js",
   "./app.js",
   "./wallet.js",

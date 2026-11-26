@@ -303,7 +303,9 @@ window.authorizeClipDownload = async function(clip, count = 1) {
     while (remainingNeeded > 0) {
       const usedQuotaOrCredit = await consumeOneVideoCreditForDownload();
       if (!usedQuotaOrCredit) {
-        if (confirm(`Você não possui vídeos disponíveis no momento (Saldo avulso e cota de 20/dia esgotados).\n\nDeseja comprar um pacote de +5 vídeos avulsos por 💎 100 com seus diamantes para continuar o download?`)) {
+        if (confirm(`Você não possui vídeos disponíveis no momento (Saldo avulso e cota de 20/dia esgotados).
+
+Deseja comprar um pacote de +5 vídeos avulsos por 💎 100 com seus diamantes para continuar o download?`)) {
           await buyExtraPack("pack5");
           const okAfterBuy = await consumeOneVideoCreditForDownload();
           if (!okAfterBuy) throw new Error("Não foi possível realizar o download após a compra.");

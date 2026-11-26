@@ -128,124 +128,88 @@ label{
   color:#b7dec7;
   margin-bottom:6px;
 }
-.input-wrap{
-  position:relative;
-  display:flex;
-  align-items:center;
-}
-input[type="text"],
-input[type="password"]{
+input{
   width:100%;
   background:rgba(3,10,7,.92);
   border:1px solid var(--border);
+  border-radius:11px;
+  padding:12px 13px;
   color:var(--txt);
-  border-radius:12px;
-  padding:12px 42px 12px 13px;
   font-size:14px;
   outline:none;
   transition:.15s;
 }
 input:focus{
   border-color:var(--border-hi);
-  box-shadow:0 0 0 3px rgba(34,197,94,.15);
+  box-shadow:0 0 0 3px rgba(34,197,94,.16);
 }
-.eye-btn{
-  position:absolute;
-  right:8px;
-  background:transparent;
-  border:0;
-  color:var(--muted);
-  font-size:15px;
-  cursor:pointer;
-  padding:6px;
-}
-.eye-btn:hover{color:var(--txt)}
-
-.options-row{
-  display:flex;
-  align-items:center;
-  justify-content:space-between;
-  gap:10px;
-  margin-bottom:16px;
-  font-size:12px;
-  color:var(--muted);
-}
-.remember-label{
-  display:inline-flex;
-  align-items:center;
-  gap:7px;
-  cursor:pointer;
-  margin:0;
-  color:var(--txt);
-}
-.remember-label input{accent-color:var(--accent);width:15px;height:15px}
 
 .btn-primary{
   width:100%;
   background:linear-gradient(135deg, var(--btn-g2), var(--btn-g1));
-  color:#ffffff;
+  color:#fff;
   border:1px solid var(--border-hi);
   border-radius:12px;
-  padding:13px 16px;
-  font-size:15px;
+  padding:12px 16px;
+  font-size:14px;
   font-weight:800;
   cursor:pointer;
   transition:.15s;
+  box-shadow:0 6px 20px rgba(20,108,67,.35);
 }
-.btn-primary:hover:not(:disabled){
+.btn-primary:hover{
   background:linear-gradient(135deg, var(--btn-g-hover), var(--btn-g2));
-  box-shadow:0 0 20px rgba(25,135,84,.42);
-  transform:translateY(-1px);
-}
-.btn-primary:disabled{
-  opacity:.55;
-  cursor:not-allowed;
+  box-shadow:0 0 22px rgba(34,197,94,.42);
 }
 
 .btn-secondary{
   width:100%;
-  margin-top:9px;
-  background:rgba(15,81,50,.22);
+  margin-top:10px;
+  background:rgba(12,34,23,.82);
   color:#bbf7d0;
   border:1px solid var(--border);
   border-radius:12px;
-  padding:11px 14px;
+  padding:11px 16px;
   font-size:13px;
   font-weight:700;
   cursor:pointer;
   transition:.15s;
 }
 .btn-secondary:hover{
-  background:rgba(20,108,67,.36);
   border-color:var(--border-hi);
+  background:rgba(20,108,67,.32);
 }
 
-#statusBox{
-  margin-top:14px;
+.msg{
+  margin-top:12px;
   font-size:12px;
-  line-height:1.45;
   min-height:18px;
   text-align:center;
-  color:var(--muted);
+  color:#86efac;
 }
-#statusBox.err{color:#fca5a5;font-weight:700}
-#statusBox.ok{color:#86efac;font-weight:700}
+.msg.err{color:#fca5a5}
 
-.footer-links{
-  margin-top:16px;
-  padding-top:14px;
-  border-top:1px solid rgba(34,197,94,.14);
+.divider{
+  height:1px;
+  background:var(--border);
+  margin:18px 0 14px;
+}
+
+.foot-links{
   display:flex;
   justify-content:space-between;
-  gap:10px;
+  align-items:center;
   font-size:12px;
+  color:var(--muted);
+  gap:10px;
+  flex-wrap:wrap;
 }
-.footer-links a{
+.foot-links a{
   color:#86efac;
   text-decoration:none;
   font-weight:700;
 }
-.footer-links a:hover{text-decoration:underline}
+.foot-links a:hover{text-decoration:underline}
 
 #appVersion{
   position:fixed;
@@ -259,109 +223,88 @@ input:focus{
   border:1px solid var(--border);
   padding:4px 10px;
   border-radius:99px;
-  z-index:20;
+  z-index:30;
 }
 
-#installPwaBtn {
-  font-size: 14px !important;
-  font-weight: 800 !important;
-  padding: 10px 14px !important;
-  min-height: 42px !important;
+.btn-install{
+  width:100%;
+  margin-top:10px;
+  background:linear-gradient(135deg,#0f5132,#146c43);
+  color:#ffffff;
+  border:1px solid rgba(74,222,128,.55);
+  border-radius:12px;
+  padding:12px 16px;
+  font-size:15px;
+  font-weight:800;
+  cursor:pointer;
+  transition:.15s;
+  box-shadow:0 6px 20px rgba(20,108,67,.35);
+}
+.btn-install:hover{
+  background:linear-gradient(135deg,#198754,#146c43);
+  box-shadow:0 0 22px rgba(34,197,94,.42);
 }
 </style>
 
 <style id="cfBgOverride">
   body {
-    background: linear-gradient(rgba(3, 7, 5, 0.72), rgba(3, 7, 5, 0.84)), url("./splash-bg.jpg") center center / cover fixed no-repeat !important;
+    background: linear-gradient(rgba(3, 7, 5, 0.78), rgba(3, 7, 5, 0.88)), url("./splash-bg.jpg") center center / cover fixed no-repeat !important;
   }
 </style>
 </head>
 <body>
-
-<main class="login-box">
+<div class="login-box">
   <div class="brand">
-    <div class="brand-badge">PWA • Conta do Hub</div>
+    <div class="brand-badge">WaveCombat Hub</div>
     <h1>Clip<span>Factory</span></h1>
-    <p>Entre com seu usuário/ID e senha para acessar sua carteira e cortes</p>
+    <p>Acesse com sua conta do Hub ou entre no modo local</p>
   </div>
 
   <section id="updateBanner" aria-live="polite">
     <div class="upd-title">
-      <span>Atualização disponível</span>
+      <span>Nova versão disponível</span>
       <span id="remoteVerLabel"></span>
     </div>
-    <button type="button" class="btn-update" id="updateBtn">
-      Atualizar para nova versão agora
-    </button>
+    <button type="button" class="btn-update" id="updateBtn">Atualizar para nova versão agora</button>
   </section>
 
-  <form id="loginForm" autocomplete="on">
+  <form id="loginForm">
     <div class="field">
-      <label for="loginUser">Usuário ou ID do jogador</label>
-      <div class="input-wrap">
-        <input type="text" id="loginUser" name="username" placeholder="Ex.: capudo7 ou seu ID" required>
-      </div>
+      <label for="userInput">ID do Jogador, Nick ou E-mail</label>
+      <input type="text" id="userInput" placeholder="Ex.: 1042, Capudo ou email@exemplo.com" autocomplete="username" required>
     </div>
 
     <div class="field">
-      <label for="loginPass">Senha</label>
-      <div class="input-wrap">
-        <input type="password" id="loginPass" name="password" placeholder="Digite sua senha" required>
-        <button type="button" class="eye-btn" id="togglePassBtn" title="Mostrar ou ocultar senha">👁</button>
-      </div>
+      <label for="passInput">Senha</label>
+      <input type="password" id="passInput" placeholder="Digite sua senha" autocomplete="current-password" required>
     </div>
 
-    <div class="options-row">
-      <label class="remember-label">
-        <input type="checkbox" id="rememberChk" checked>
-        Lembrar usuário
-      </label>
-      <button type="button" id="checkUpdManualBtn" style="background:none;border:0;color:#86efac;font-size:12px;font-weight:700;cursor:pointer">
-        Checar versão
-      </button>
-    </div>
-
-    <button type="submit" class="btn-primary" id="loginSubmitBtn">Entrar no aplicativo</button>
-    <button type="button" class="btn-secondary" id="installPwaBtn">Instalar aplicativo no celular</button>
+    <button type="submit" class="btn-primary" id="loginBtn">Entrar no ClipFactory</button>
   </form>
 
-  <div id="statusBox"></div>
+  <button type="button" class="btn-secondary" id="localModeBtn">Entrar no modo local (sem conta)</button>
+  <button type="button" class="btn-install" id="installPwaBtn" style="display:none">📲 Instalar aplicativo</button>
 
-  <div class="footer-links">
-    <a href="https://wavecombat-hub.onrender.com" target="_blank" rel="noopener">Criar conta / Diamantes</a>
-    <a href="./editor.html">Abrir modo local</a>
+  <div class="msg" id="msgBox"></div>
+
+  <div class="divider"></div>
+
+  <div class="foot-links">
+    <a href="https://wavecombat-hub.onrender.com/#inicio" target="_blank" rel="noopener">Criar conta no Hub</a>
+    <a href="https://youtube.com/@capudooficial7?si=awSkNhuT4YY177Yp" target="_blank" rel="noopener">Canal oficial</a>
   </div>
-</main>
+</div>
 
-<div id="appVersion">v0.030</div>
+<div id="appVersion">v0.031</div>
 
 <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
 <script>
-"use strict";
-
-const APP_VERSION = "0.030";
-const VERSION_CHECK_URL = "./version.json";
-const SUPABASE_URL = "https://ipqjeacdfiomcxfuixdj.supabase.co";
-const SUPABASE_KEY = "sb_publishable_EWW84q_43YbOvMwB_Rua-A_X465PbLP";
-
-const $ = id => document.getElementById(id);
-let deferredInstallPrompt = null;
-let latestUpdateUrl = null;
-
-$("appVersion").textContent = "v" + APP_VERSION;
-
-function setStatus(msg, type = "") {
-  const box = $("statusBox");
-  box.textContent = msg;
-  box.className = type;
-}
-
-if ("serviceWorker" in navigator) {
-  window.addEventListener("load", () => {
-    navigator.serviceWorker.register("./sw.js").catch(() => {});
-  });
-}
-
+(function () {
+  window.latestUpdateUrl = "./index.html";
+  window.CLIPFACTORY_VERSION = "0.031";
+})();
+</script>
+<script>
 async function triggerRealUpdate(btnEl, statusFn) {
   if (btnEl) {
     btnEl.disabled = true;
@@ -393,196 +336,203 @@ async function triggerRealUpdate(btnEl, statusFn) {
     dl.remove();
   }
 
-  const target = (latestUpdateUrl || "./index.html");
+  const target = (window.latestUpdateUrl || "./index.html");
   const sep = target.includes("?") ? "&" : "?";
+  const ver = window.CLIPFACTORY_VERSION || "0.031";
   setTimeout(() => {
-    window.location.replace(`${target}${sep}v=${APP_VERSION}&t=${Date.now()}`);
+    window.location.replace(`${target}${sep}v=${ver}&t=${Date.now()}`);
   }, 350);
 }
+</script>
+<script>
+"use strict";
 
-$("togglePassBtn").addEventListener("click", () => {
-  const inp = $("loginPass");
-  const isPass = inp.type === "password";
-  inp.type = isPass ? "text" : "password";
-  $("togglePassBtn").textContent = isPass ? "🙈" : "👁";
+const APP_VERSION = "0.031";
+const SUPABASE_URL = "https://ipqjeacdfiomcxfuixdj.supabase.co";
+const SUPABASE_KEY = "sb_publishable_EWW84q_43YbOvMwB_Rua-A_X465PbLP";
+
+const msgBox = document.getElementById("msgBox");
+const userInput = document.getElementById("userInput");
+const passInput = document.getElementById("passInput");
+const loginBtn = document.getElementById("loginBtn");
+const localModeBtn = document.getElementById("localModeBtn");
+const updateBanner = document.getElementById("updateBanner");
+const updateBtn = document.getElementById("updateBtn");
+const remoteVerLabel = document.getElementById("remoteVerLabel");
+
+document.getElementById("appVersion").textContent = "v" + APP_VERSION;
+
+if ("serviceWorker" in navigator) {
+  window.addEventListener("load", () => {
+    navigator.serviceWorker.register("./sw.js").catch(() => {});
+  });
+}
+
+let deferredInstallPrompt = null;
+const installPwaBtn = document.getElementById("installPwaBtn");
+
+function showInstallButtonIfPossible() {
+  if (!installPwaBtn) return;
+  const isStandalone = window.matchMedia("(display-mode: standalone)").matches || window.navigator.standalone === true;
+  if (!isStandalone) {
+    installPwaBtn.style.display = "block";
+  }
+}
+
+window.addEventListener("beforeinstallprompt", (e) => {
+  e.preventDefault();
+  deferredInstallPrompt = e;
+  showInstallButtonIfPossible();
 });
 
-(function initSavedLogin() {
-  try {
-    const saved = localStorage.getItem("cf_saved_login_user");
-    if (saved) {
-      $("loginUser").value = saved;
-      $("rememberChk").checked = true;
+if (installPwaBtn) {
+  installPwaBtn.addEventListener("click", async () => {
+    if (deferredInstallPrompt) {
+      deferredInstallPrompt.prompt();
+      const choice = await deferredInstallPrompt.userChoice.catch(() => null);
+      deferredInstallPrompt = null;
+      if (choice && choice.outcome === "accepted") {
+        installPwaBtn.style.display = "none";
+      }
+      return;
     }
-  } catch (e) {}
-})();
+    setMsg("No navegador, abra o menu (⋮) e toque em 'Instalar aplicativo' ou 'Adicionar à tela inicial'.", false);
+  });
+}
+
+window.addEventListener("appinstalled", () => {
+  deferredInstallPrompt = null;
+  if (installPwaBtn) installPwaBtn.style.display = "none";
+  setMsg("ClipFactory instalado com sucesso!", false);
+});
+
+showInstallButtonIfPossible();
+
+function setMsg(text, isErr = false) {
+  msgBox.textContent = text || "";
+  msgBox.className = isErr ? "msg err" : "msg";
+}
 
 function isNewerVersion(remoteVer, localVer) {
   if (!remoteVer) return false;
-  const rParts = String(remoteVer).trim().split(".").map(n => parseInt(n, 10) || 0);
-  const lParts = String(localVer).trim().split(".").map(n => parseInt(n, 10) || 0);
-  const len = Math.max(rParts.length, lParts.length);
+  const r = String(remoteVer).trim().split(".").map(n => parseInt(n, 10) || 0);
+  const l = String(localVer).trim().split(".").map(n => parseInt(n, 10) || 0);
+  const len = Math.max(r.length, l.length);
   for (let i = 0; i < len; i++) {
-    const a = rParts[i] || 0;
-    const b = lParts[i] || 0;
-    if (a > b) return true;
-    if (a < b) return false;
+    if ((r[i] || 0) > (l[i] || 0)) return true;
+    if ((r[i] || 0) < (l[i] || 0)) return false;
   }
   return false;
 }
 
-async function checkForUpdates(showFeedbackIfUpToDate = false) {
-  if (!navigator.onLine) {
-    if (showFeedbackIfUpToDate) setStatus("Sem conexão no momento para checar atualização.", "err");
-    return;
-  }
+async function checkForUpdate() {
+  if (!navigator.onLine) return;
   try {
-    const res = await fetch(`${VERSION_CHECK_URL}?v=${APP_VERSION}&t=${Date.now()}`, { cache: "no-store" });
+    const res = await fetch(`./version.json?t=${Date.now()}`, { cache: "no-store" });
     if (!res.ok) return;
     const data = await res.json();
     if (data && data.package_url) { window.__cfPackageUrl = data.package_url; }
     if (data && isNewerVersion(data.version, APP_VERSION)) {
-      latestUpdateUrl = data.url || "./index.html";
-      $("remoteVerLabel").textContent = `v${data.version}`;
-      $("updateBanner").classList.add("show");
-    } else {
-      $("updateBanner").classList.remove("show");
-      if (showFeedbackIfUpToDate) {
-        setStatus(`Você já está na versão mais recente (v${APP_VERSION}).`, "ok");
-      }
+      remoteVerLabel.textContent = `v${data.version}`;
+      updateBanner.classList.add("show");
     }
-  } catch (e) {
-    if (showFeedbackIfUpToDate) {
-      setStatus("Não foi possível verificar atualização agora.", "err");
-    }
-  }
+  } catch (e) {}
 }
 
-$("checkUpdManualBtn").addEventListener("click", () => checkForUpdates(true));
+updateBtn.addEventListener("click", () => triggerRealUpdate(updateBtn, setMsg));
 
-$("updateBtn").addEventListener("click", () => triggerRealUpdate($("updateBtn"), setStatus));
-
-window.addEventListener("beforeinstallprompt", e => {
-  e.preventDefault();
-  deferredInstallPrompt = e;
-});
-
-$("installPwaBtn").addEventListener("click", async () => {
-  if (deferredInstallPrompt) {
-    deferredInstallPrompt.prompt();
-    await deferredInstallPrompt.userChoice;
-    deferredInstallPrompt = null;
+function goToEditor(playerId, nick = "") {
+  const params = new URLSearchParams(window.location.search);
+  if (playerId) {
+    params.set("id", playerId);
   } else {
-    alert("Para instalar no celular: toque no menu do navegador (⋮) e escolha 'Instalar aplicativo' ou 'Adicionar à tela inicial'.");
+    params.delete("id");
   }
-});
+  try {
+    sessionStorage.setItem("cf_session_user", JSON.stringify({
+      id_jogador: playerId || "LOCAL",
+      nick: nick || "Modo Local",
+      ts: Date.now()
+    }));
+  } catch (e) {}
+  const qs = params.toString();
+  window.location.href = "./editor.html" + (qs ? "?" + qs : "");
+}
 
-$("loginForm").addEventListener("submit", async e => {
+function getSb() {
+  if (!window.supabase) return null;
+  return window.supabase.createClient(SUPABASE_URL, SUPABASE_KEY);
+}
+
+document.getElementById("loginForm").addEventListener("submit", async (e) => {
   e.preventDefault();
-  const identifier = $("loginUser").value.trim();
-  const password = $("loginPass").value;
-  if (!identifier || !password) return;
+  const rawUser = userInput.value.trim();
+  const rawPass = passInput.value;
 
-  if ($("rememberChk").checked) {
-    localStorage.setItem("cf_saved_login_user", identifier);
-  } else {
-    localStorage.removeItem("cf_saved_login_user");
+  if (!rawUser || !rawPass) {
+    setMsg("Preencha usuário e senha.", true);
+    return;
   }
 
-  const btn = $("loginSubmitBtn");
-  btn.disabled = true;
-  btn.textContent = "Verificando conta…";
-  setStatus("Conectando ao Supabase…");
+  loginBtn.disabled = true;
+  loginBtn.textContent = "Verificando conta...";
+  setMsg("");
 
   try {
-    const sb = window.supabase.createClient(SUPABASE_URL, SUPABASE_KEY);
-
-    if (identifier.includes("@")) {
-      const { data: authData, error: authErr } = await sb.auth.signInWithPassword({
-        email: identifier,
-        password,
-      });
-      if (!authErr && authData?.user) {
-        const playerId = authData.user.user_metadata?.id_jogador || authData.user.id;
-        const nick = authData.user.user_metadata?.nick || identifier.split("@")[0];
-        let diamantes = 0;
-        const wRes = await sb
-          .from("carteira_diamantes")
-          .select("diamantes")
-          .eq("id_jogador", String(playerId))
-          .maybeSingle();
-        if (!wRes.error && wRes.data) diamantes = Number(wRes.data.diamantes || 0);
-
-        sessionStorage.setItem("cf_session_user", JSON.stringify({
-          id_jogador: String(playerId),
-          nick,
-          diamantes,
-          loggedAt: Date.now(),
-        }));
-        setStatus("Login realizado! Abrindo painel…", "ok");
-        window.location.href = `./editor.html?id=${encodeURIComponent(playerId)}`;
-        return;
-      }
+    const sb = getSb();
+    if (!sb) {
+      throw new Error("Serviço de autenticação indisponível no momento.");
     }
 
-    const byId = await sb
-      .from("usuarios")
-      .select("*")
-      .eq("id_jogador", identifier)
-      .maybeSingle();
-
-    let userRow = byId.data;
-    if (!userRow) {
-      const byNick = await sb
-        .from("usuarios")
-        .select("*")
-        .ilike("nick", identifier)
-        .maybeSingle();
-      userRow = byNick.data;
+    let query = sb.from("usuarios").select("*");
+    if (/^\d+$/.test(rawUser)) {
+      query = query.eq("id_jogador", rawUser);
+    } else if (rawUser.includes("@")) {
+      query = query.ilike("email", rawUser);
+    } else {
+      query = query.ilike("nick", rawUser);
     }
 
-    if (!userRow) {
-      throw new Error("Usuário ou ID não encontrado. Verifique seus dados ou crie conta no Hub.");
+    const { data, error } = await query.limit(5);
+    if (error) {
+      throw new Error("Não foi possível consultar a conta no Hub.");
     }
 
-    const storedPass = userRow.senha ?? userRow.password ?? null;
-    if (storedPass !== null && String(storedPass) !== password) {
-      throw new Error("Senha incorreta.");
+    const user = (data || []).find(row => {
+      const storedPass = row.senha ?? row.password ?? row.senha_hash ?? "";
+      return String(storedPass) === String(rawPass);
+    });
+
+    if (!user) {
+      setMsg("Usuário ou senha inválidos.", true);
+      loginBtn.disabled = false;
+      loginBtn.textContent = "Entrar no ClipFactory";
+      return;
     }
 
-    const playerId = String(userRow.id_jogador);
-    const nick = String(userRow.nick || playerId);
-
-    let diamantes = 0;
-    const wRes = await sb
-      .from("carteira_diamantes")
-      .select("diamantes")
-      .eq("id_jogador", playerId)
-      .maybeSingle();
-    if (!wRes.error && wRes.data) {
-      diamantes = Number(wRes.data.diamantes || 0);
-    }
-
-    sessionStorage.setItem("cf_session_user", JSON.stringify({
-      id_jogador: playerId,
-      nick,
-      diamantes,
-      loggedAt: Date.now(),
-    }));
-
-    setStatus(`Bem-vindo, ${nick}! Saldo: ${diamantes} diamantes.`, "ok");
-    window.location.href = `./editor.html?id=${encodeURIComponent(playerId)}`;
+    const resolvedId = String(user.id_jogador ?? user.id ?? rawUser);
+    const resolvedNick = String(user.nick ?? user.nome ?? rawUser);
+    setMsg(`Bem-vindo, ${resolvedNick}! Redirecionando...`);
+    setTimeout(() => goToEditor(resolvedId, resolvedNick), 350);
   } catch (err) {
-    setStatus(err.message || "Falha ao entrar.", "err");
-  } finally {
-    btn.disabled = false;
-    btn.textContent = "Entrar no aplicativo";
+    setMsg(err.message || "Erro ao entrar.", true);
+    loginBtn.disabled = false;
+    loginBtn.textContent = "Entrar no ClipFactory";
   }
 });
 
-window.addEventListener("DOMContentLoaded", () => {
-  checkForUpdates(false);
+localModeBtn.addEventListener("click", () => {
+  goToEditor("", "Modo Local");
 });
+
+try {
+  const saved = JSON.parse(sessionStorage.getItem("cf_session_user") || "null");
+  if (saved && saved.id_jogador && saved.id_jogador !== "LOCAL" && !userInput.value) {
+    userInput.value = saved.id_jogador;
+  }
+} catch (e) {}
+
+checkForUpdate();
 </script>
 </body>
 </html>

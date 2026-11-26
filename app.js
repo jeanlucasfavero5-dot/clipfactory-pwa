@@ -80,7 +80,7 @@ function getDownloadApiBase() {
   if (typeof window.HUB !== "undefined" && window.HUB.apiBase) {
     return String(window.HUB.apiBase).replace(/\/+$/, "");
   }
-  return "https://clipfactory-api.onrender.com";
+  return "https://clipfactory-apibaixar.onrender.com";
 }
 
 function parseFilenameFromDisposition(disposition, fallbackName) {

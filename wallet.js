@@ -1,6 +1,6 @@
 /* ============================================================
    Integração Hub WaveCombat — Supabase (assinaturas + creditos_videos + carteira_diamantes)
-   v0.030: Desconto de downloads priorizando Avulso -> Assinatura 20/dia -> Diamantes (com modal de compra se zerado)
+   v0.031: Desconto de downloads priorizando Avulso -> Assinatura 20/dia -> Diamantes (com modal de compra se zerado)
    ============================================================ */
 "use strict";
 
@@ -39,7 +39,7 @@ function resolveInitialPlayerId() {
 
 const HUB = {
   playerId: resolveInitialPlayerId(),
-  apiBase: new URLSearchParams(window.location.search).get("api") || "https://clipfactory-api.onrender.com",
+  apiBase: new URLSearchParams(window.location.search).get("api") || "https://clipfactory-apibaixar.onrender.com",
   supabase: null,
   nick: null,
   diamantes: null,
@@ -223,9 +223,7 @@ async function addExtraCreditsToSupabase(qty) {
   }
 }
 
-/* Regra solicitada: Descontar primeiro do saldo AVULSO de vídeos; se zerado, descontar da ASSINATURA 20/dia. Se ambos zerados, direcionar para comprar com diamantes. */
 async function consumeOneVideoCreditForDownload() {
-  // 1. Tenta crédito AVULSO primeiro
   if (Number(HUB.extraCredits.videos_restantes || 0) > 0) {
     const nextRem = Math.max(0, Number(HUB.extraCredits.videos_restantes) - 1);
     HUB.extraCredits.videos_restantes = nextRem;
@@ -260,7 +258,6 @@ async function consumeOneVideoCreditForDownload() {
     return true;
   }
 
-  // 2. Tenta cota DIÁRIA da Assinatura (20/dia)
   const todayStr = todayIsoDate();
   const hasWeekly = !!(HUB.sub && HUB.sub.ativa);
   const dailyLimit = Number(HUB.sub?.limite_diario || 20);
@@ -306,10 +303,8 @@ window.authorizeClipDownload = async function(clip, count = 1) {
     while (remainingNeeded > 0) {
       const usedQuotaOrCredit = await consumeOneVideoCreditForDownload();
       if (!usedQuotaOrCredit) {
-        // Se ambos estão zerados, comprar pacote avulso usando diamantes ou alertar
         if (confirm(`Você não possui vídeos disponíveis no momento (Saldo avulso e cota de 20/dia esgotados).\n\nDeseja comprar um pacote de +5 vídeos avulsos por 💎 100 com seus diamantes para continuar o download?`)) {
           await buyExtraPack("pack5");
-          // Re-executa o desconto
           const okAfterBuy = await consumeOneVideoCreditForDownload();
           if (!okAfterBuy) throw new Error("Não foi possível realizar o download após a compra.");
         } else {

@@ -186,6 +186,7 @@ input:focus{
   min-height:18px;
   text-align:center;
   color:#86efac;
+  word-break:break-word;
 }
 .msg.err{color:#fca5a5}
 
@@ -464,6 +465,23 @@ function getSb() {
   return window.supabase.createClient(SUPABASE_URL, SUPABASE_KEY);
 }
 
+function extractPassword(row) {
+  if (!row || typeof row !== "object") return "";
+  for (const k of ["senha", "password", "senha_hash", "pass", "pwd"]) {
+    if (row[k] !== undefined && row[k] !== null) return String(row[k]);
+  }
+  return "";
+}
+
+function matchesPassword(storedPass, rawPass) {
+  const s = String(storedPass ?? "");
+  const r = String(rawPass ?? "");
+  if (!s) return false;
+  if (s === r) return true;
+  if (s.trim() === r.trim()) return true;
+  return false;
+}
+
 document.getElementById("loginForm").addEventListener("submit", async (e) => {
   e.preventDefault();
   const rawUser = userInput.value.trim();
@@ -484,27 +502,58 @@ document.getElementById("loginForm").addEventListener("submit", async (e) => {
       throw new Error("Serviço de autenticação indisponível no momento.");
     }
 
-    let query = sb.from("usuarios").select("*");
+    const escapedPattern = rawUser.replace(/[%_\]/g, "\$&");
+    let rows = [];
+
     if (/^\d+$/.test(rawUser)) {
-      query = query.eq("id_jogador", rawUser);
-    } else if (rawUser.includes("@")) {
-      query = query.ilike("email", rawUser);
-    } else {
-      query = query.ilike("nick", rawUser);
+      const byId = await sb.from("usuarios").select("*").eq("id_jogador", rawUser).limit(5);
+      if (byId.error) {
+        throw new Error("Erro Supabase (id_jogador): " + byId.error.message);
+      }
+      rows = byId.data || [];
     }
 
-    const { data, error } = await query.limit(5);
-    if (error) {
-      throw new Error("Não foi possível consultar a conta no Hub.");
+    if (!rows.length && rawUser.includes("@")) {
+      const byEmail = await sb.from("usuarios").select("*").ilike("email", escapedPattern).limit(5);
+      if (byEmail.error) {
+        throw new Error("Erro Supabase (email): " + byEmail.error.message);
+      }
+      rows = byEmail.data || [];
     }
 
-    const user = (data || []).find(row => {
-      const storedPass = row.senha ?? row.password ?? row.senha_hash ?? "";
-      return String(storedPass) === String(rawPass);
-    });
+    if (!rows.length) {
+      const byNick = await sb.from("usuarios").select("*").ilike("nick", escapedPattern).limit(10);
+      if (byNick.error) {
+        throw new Error("Erro Supabase (nick): " + byNick.error.message);
+      }
+      rows = byNick.data || [];
+    }
+
+    if (!rows.length) {
+      const broad = await sb.from("usuarios").select("*").limit(200);
+      if (broad.error) {
+        throw new Error("Erro Supabase (consulta usuarios / RLS): " + broad.error.message);
+      }
+      const needle = rawUser.toLowerCase();
+      rows = (broad.data || []).filter(r => {
+        const idMatch = String(r.id_jogador ?? r.id ?? "").toLowerCase() === needle;
+        const nickMatch = String(r.nick ?? r.usuario ?? r.nome ?? "").trim().toLowerCase() === needle;
+        const emailMatch = String(r.email ?? "").trim().toLowerCase() === needle;
+        return idMatch || nickMatch || emailMatch;
+      });
+    }
+
+    if (!rows.length) {
+      setMsg("Conta não encontrada no Hub (verifique o ID, Nick ou E-mail).", true);
+      loginBtn.disabled = false;
+      loginBtn.textContent = "Entrar no ClipFactory";
+      return;
+    }
+
+    const user = rows.find(row => matchesPassword(extractPassword(row), rawPass));
 
     if (!user) {
-      setMsg("Usuário ou senha inválidos.", true);
+      setMsg("Senha incorreta para a conta encontrada.", true);
       loginBtn.disabled = false;
       loginBtn.textContent = "Entrar no ClipFactory";
       return;

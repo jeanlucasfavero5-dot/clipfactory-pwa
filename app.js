@@ -68,9 +68,30 @@ function triggerBlobDownload(url, fileName) {
   const a = document.createElement("a");
   a.href = url;
   a.download = fileName;
+  a.rel = "noopener";
   document.body.appendChild(a);
   a.click();
   a.remove();
+}
+
+function getDownloadApiBase() {
+  const fromUrl = new URLSearchParams(window.location.search).get("api");
+  if (fromUrl) return String(fromUrl).replace(/\/+$/, "");
+  if (typeof window.HUB !== "undefined" && window.HUB.apiBase) {
+    return String(window.HUB.apiBase).replace(/\/+$/, "");
+  }
+  return "https://clipfactory-api.onrender.com";
+}
+
+function parseFilenameFromDisposition(disposition, fallbackName) {
+  if (!disposition) return fallbackName;
+  const utf8Match = disposition.match(/filename\*=UTF-8''([^;]+)/i);
+  if (utf8Match && utf8Match[1]) {
+    try { return decodeURIComponent(utf8Match[1].trim()); } catch (_) {}
+  }
+  const plainMatch = disposition.match(/filename="?([^";]+)"?/i);
+  if (plainMatch && plainMatch[1]) return plainMatch[1].trim();
+  return fallbackName;
 }
 
 function isMobileDevice() {
@@ -489,7 +510,6 @@ function initStyleControls() {
     $("hookAnim").onchange = e => { state.hook.anim = e.target.value; };
   }
 
-  // Controles da Barrinha Social adicionados
   if ($("socialToggle")) {
     $("socialToggle").onchange = e => { state.social.enabled = e.target.checked; };
   }
@@ -593,6 +613,8 @@ function loadVideoFile(file) {
   if (state.videoUrl) URL.revokeObjectURL(state.videoUrl);
   state.file = file;
   state.videoUrl = URL.createObjectURL(file);
+  state.sourceType = "file";
+  state.sourceName = file.name || "video.mp4";
   state.duration = 0;
   state.segStart = 0;
   state.segEnd = state.maxSegSec;
@@ -653,7 +675,44 @@ function setLinkStatusMessage(msg, mode = "") {
   });
 }
 
-async function loadVideoFromUrl(rawUrl) {
+function isPlatformOrStreamUrl(parsedUrl) {
+  return (
+    /\.(m3u8|mpd)(\?|$)/i.test(parsedUrl.pathname) ||
+    /(youtube\.com|youtu\.be|twitch\.tv|tiktok\.com|kwai\.com|instagram\.com|facebook\.com|fb\.watch|kick\.com)/i.test(parsedUrl.hostname)
+  );
+}
+
+async function fetchVideoBlobViaApi(targetUrl, rangeCfg) {
+  const apiBase = getDownloadApiBase();
+  const params = new URLSearchParams({
+    url: targetUrl,
+    start_sec: String(Math.max(0, Math.round(rangeCfg.startSec || 0))),
+    end_sec: String(Math.max(5, Math.round(rangeCfg.endSec || 1800))),
+    full_if_shorter: rangeCfg.fullIfShorter ? "true" : "false"
+  });
+  const endpoint = `${apiBase}/api/download?${params.toString()}`;
+
+  const resp = await fetch(endpoint, { method: "GET" });
+  if (!resp.ok) {
+    let detail = `Erro HTTP ${resp.status} na API de download.`;
+    try {
+      const errJson = await resp.json();
+      if (errJson && errJson.detail) detail = String(errJson.detail);
+    } catch (_) {}
+    throw new Error(detail);
+  }
+
+  const blob = await resp.blob();
+  if (!blob || blob.size === 0) {
+    throw new Error("A API retornou um arquivo vazio.");
+  }
+
+  const disp = resp.headers.get("Content-Disposition") || "";
+  const fileName = parseFilenameFromDisposition(disp, "clipfactory_download.mp4");
+  return { blob, fileName };
+}
+
+async function loadVideoFromUrl(rawUrl, rangeCfg = null) {
   const cleanUrl = String(rawUrl || "").trim();
   if (!cleanUrl) {
     setLinkStatusMessage("Informe um link válido (http:// ou https://) para carregar.", "err");
@@ -670,7 +729,22 @@ async function loadVideoFromUrl(rawUrl) {
     return false;
   }
 
-  setLinkStatusMessage("Carregando link / stream no editor...", "ok");
+  if (isPlatformOrStreamUrl(parsed)) {
+    try {
+      setLinkStatusMessage("Baixando trecho do link/live pelo servidor para abrir no editor (pode levar alguns segundos)...", "ok");
+      const cfg = rangeCfg || { startSec: 0, endSec: 1800, fullIfShorter: true };
+      const { blob, fileName } = await fetchVideoBlobViaApi(cleanUrl, cfg);
+      const fileObj = new File([blob], fileName, { type: blob.type || "video/mp4" });
+      loadVideoFile(fileObj);
+      setLinkStatusMessage(`Vídeo carregado no editor (${fileName}).`, "ok");
+      return true;
+    } catch (err) {
+      setLinkStatusMessage("Não foi possível carregar o vídeo do link no editor: " + err.message, "err");
+      return false;
+    }
+  }
+
+  setLinkStatusMessage("Carregando link direto de vídeo no editor...", "ok");
 
   if (state.videoUrl && state.sourceType === "file") {
     try { URL.revokeObjectURL(state.videoUrl); } catch (_) {}
@@ -684,10 +758,6 @@ async function loadVideoFromUrl(rawUrl) {
   const videoEl = $("videoEl");
   if (!videoEl) return false;
 
-  const isLikelyPlaylistOrPage =
-    /\.(m3u8|mpd)(\?|$)/i.test(parsed.pathname) ||
-    /(youtube\.com|youtu\.be|twitch\.tv|tiktok\.com|kwai\.com|instagram\.com)/i.test(parsed.hostname);
-
   videoEl.pause();
   videoEl.crossOrigin = "anonymous";
   videoEl.src = cleanUrl;
@@ -698,14 +768,7 @@ async function loadVideoFromUrl(rawUrl) {
       if (settled) return;
       settled = true;
       attachVideoMetadataHandlers(videoEl, state.sourceName || cleanUrl);
-      if (isLikelyPlaylistOrPage) {
-        setLinkStatusMessage(
-          "Link carregado no player. Se o navegador não reproduzir diretamente, use o app ClipFactory Desktop ou um link direto de arquivo de vídeo.",
-          "ok"
-        );
-      } else {
-        setLinkStatusMessage("Link carregado com sucesso no editor.", "ok");
-      }
+      setLinkStatusMessage("Link carregado com sucesso no editor.", "ok");
       resolve(true);
     };
 
@@ -713,7 +776,7 @@ async function loadVideoFromUrl(rawUrl) {
       if (settled) return;
       settled = true;
       setLinkStatusMessage(
-        "Não foi possível reproduzir este link direto no navegador. Envie um arquivo local ou use o modo Desktop.",
+        "Não foi possível reproduzir este link direto no navegador. Envie um arquivo local ou use um link suportado pela API.",
         "err"
       );
       resolve(false);
@@ -797,30 +860,36 @@ function initSourceAndHookEnhancements() {
       return false;
     }
 
-    const baseName = (parsed.pathname && parsed.pathname !== "/" ? parsed.pathname.split("/").pop() : "") || "clipfactory-video";
-    const fname = /\.(mp4|webm|mov|mkv|m3u8)$/i.test(baseName) ? baseName : (baseName + ".mp4");
+    const dlBtn = $("downloadSourceVideoBtn");
+    const editBtn = $("step1LoadUrlBtn");
+    if (dlBtn) dlBtn.disabled = true;
+    if (editBtn) editBtn.disabled = true;
 
     try {
-      setLinkStatusMessage("Baixando vídeo para a pasta Downloads do dispositivo...", "ok");
-      const resp = await fetch(targetUrl);
-      if (!resp.ok) throw new Error("HTTP " + resp.status);
-      const blob = await resp.blob();
-      const bUrl = URL.createObjectURL(blob);
-      triggerBlobDownload(bUrl, fname);
-      setTimeout(() => URL.revokeObjectURL(bUrl), 120000);
-      setLinkStatusMessage("Vídeo enviado para a pasta Downloads do dispositivo!", "ok");
-    } catch (_) {
-      triggerBlobDownload(targetUrl, fname);
-      setLinkStatusMessage("Solicitação de download enviada para o navegador (pasta Downloads).", "ok");
-    }
+      const spanMin = Math.max(1, Math.round((rangeCfg.endSec - rangeCfg.startSec) / 60));
+      setLinkStatusMessage(`Processando download no servidor (${fmt(rangeCfg.startSec)} → ${fmt(rangeCfg.endSec)} · ~${spanMin} min). Aguarde, não abre a plataforma...`, "ok");
 
-    if (alsoOpenEditor) {
-      await loadVideoFromUrl(targetUrl);
-      applyRangeToEditor(rangeCfg.startSec, rangeCfg.endSec, rangeCfg.fullIfShorter);
-      if ($("step1")) $("step1").classList.add("hidden");
-      if ($("editor")) $("editor").classList.remove("hidden");
+      const { blob, fileName } = await fetchVideoBlobViaApi(targetUrl, rangeCfg);
+      const blobUrl = URL.createObjectURL(blob);
+
+      triggerBlobDownload(blobUrl, fileName);
+      setLinkStatusMessage(`Download concluído! Arquivo "${fileName}" salvo no dispositivo.`, "ok");
+
+      if (alsoOpenEditor) {
+        const fileObj = new File([blob], fileName, { type: blob.type || "video/mp4" });
+        loadVideoFile(fileObj);
+        applyRangeToEditor(0, Math.min(1800, (rangeCfg.endSec - rangeCfg.startSec) || 1800), true);
+      }
+
+      setTimeout(() => URL.revokeObjectURL(blobUrl), 180000);
+      return true;
+    } catch (err) {
+      setLinkStatusMessage("Falha ao baixar vídeo pela API: " + err.message, "err");
+      return false;
+    } finally {
+      if (dlBtn) dlBtn.disabled = false;
+      if (editBtn) editBtn.disabled = false;
     }
-    return true;
   };
 
   if ($("step1LoadUrlBtn") && $("step1UrlInput")) {
@@ -1127,7 +1196,6 @@ function renderHeatmap(scores) {
   });
 }
 
-/* Regra solicitada: Se pedir 5 vídeos gera APENAS 5, se pedir 10 gera APENAS 10, se pedir melhores momentos gera APENAS 10 */
 async function analyzeMoments() {
   const videoEl = $("videoEl");
   if ((!state.file && !state.videoUrl) || !videoEl.src) {
@@ -1145,8 +1213,7 @@ async function analyzeMoments() {
   const maxDur = state.duration || 60;
   const endSec = Math.max(startSec + 10, Math.min(maxDur, state.segEnd || maxDur));
   const clipLen = (typeof window.HUB !== "undefined" && window.HUB.duracao) ? window.HUB.duracao : 30;
-  
-  // Limite exato de clipes com base no plano ou pedido (5, 10 ou 10)
+
   let clipTargetCount = 10;
   if (typeof window.HUB !== "undefined" && window.HUB.plano === "pack5") {
     clipTargetCount = 5;
@@ -1333,7 +1400,6 @@ function getSelectedExportFormatInfo() {
   return { mode, tierKey, isAvi, fps, ext };
 }
 
-/* Regra corrigida: Autorização e desconto obrigatórios ao baixar individualmente ou em lote */
 async function exportAndDownloadClip(clip) {
   if (typeof window.authorizeClipDownload === "function") {
     const allowed = await window.authorizeClipDownload(clip, 1);
@@ -1829,15 +1895,12 @@ function drawFrameToCanvas(videoEl, canvas, nowSec, showSplitGuide = false) {
     }
   }
 
-  // Desenha Barrinha Social
   drawSocialBar(ctx, nowSec);
 
-  // Desenha Gancho Visual
   if (state.hook.enabled && state.hook.text && state.hook.text.trim()) {
     drawStyledText(ctx, state.hook.text, state.hook.x, state.hook.y, +($("hookSz")?.value) || 64, state.hook, nowSec);
   }
 
-  // Desenha Legendas
   const activeCue = getActiveCaption(videoEl.currentTime || 0);
   if (activeCue && activeCue.text && activeCue.text.trim()) {
     drawStyledText(ctx, activeCue.text, state.capStyle.x, state.capStyle.y, +($("fontSz")?.value) || 48, state.capStyle, nowSec);

@@ -74,7 +74,6 @@ function triggerBlobDownload(url, fileName) {
   a.remove();
 }
 
-function getDownloadApiBase() {
 function getDownloadApiBases() {
   const fromUrl = new URLSearchParams(window.location.search).get("api");
   let stored = null;

@@ -1,6 +1,6 @@
 "use strict";
 
-const CACHE_NAME = "clipfactory-pwa-v0.033";
+const CACHE_NAME = "clipfactory-pwa-v0.034";
 const CORE_ASSETS = [
   "./",
   "./index.html",

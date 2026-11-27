@@ -226,8 +226,7 @@ a.dl{display:inline-block;margin-top:10px;background:linear-gradient(135deg,var(
   font-weight: 700;
 }
 
-.pre-grid3{display:grid;grid-template-columns:repeat(3,minmax(0,1fr));gap:12px;margin-top:6px;text-align:left}
-@media(max-width:780px){.pre-grid3{grid-template-columns:1fr}}
+.pre-grid3{display:grid;grid-template-columns:minmax(0,1fr);gap:12px;margin-top:6px;text-align:left}
 .pre-card{background:rgba(5,16,10,.78);border:1px solid var(--border);border-radius:14px;padding:12px;display:flex;flex-direction:column;gap:8px}
 .pre-card.active-mode{border-color:var(--border2);box-shadow:0 0 0 2px rgba(34,197,94,.16)}
 .pre-card h3{font-size:13px;color:var(--acc2);font-weight:800}
@@ -290,54 +289,17 @@ a.dl{display:inline-block;margin-top:10px;background:linear-gradient(135deg,var(
     <div class="card-body">
       <div class="pre-grid3">
         <div class="pre-card active-mode" id="cardOptLocal">
-          <h3>📁 1. Envio local</h3>
+          <h3>📁 Envio local</h3>
           <p>Envie um arquivo de vídeo do seu aparelho (MP4, MOV, WEBM, MKV) direto para o editor.</p>
-          <div id="drop" style="padding:22px 12px">
+          <label for="fileInput" id="drop" style="padding:22px 12px;display:block">
             <div class="big">📤</div>
             <p style="font-size:12px"><b>Escolher arquivo</b> ou arrastar vídeo</p>
-          </div>
-          <input type="file" id="fileInput" accept="video/*" class="hidden">
+          </label>
+          <input type="file" id="fileInput" accept="video/*,.mp4,.mov,.webm,.mkv" style="opacity:0;position:absolute;width:1px;height:1px;border:0;padding:0;margin:-1px;overflow:hidden">
         </div>
 
-        <div class="pre-card" id="cardOptEditLink">
-          <h3>🔗 2. Editar com link / live</h3>
-          <p>Cole o link do vídeo ou live para abrir no editor (até 30 min ou inteiro se menor).</p>
-          <input type="url" id="step1UrlInput" placeholder="https://youtu.be/... ou stream/mp4">
-          <div class="range-box">
-            <div style="font-size:11px;font-weight:700;color:#b7dec7;margin-bottom:4px">Minutagem (máx. 30 min)</div>
-            <div class="range-row">
-              <input type="number" id="editLinkStartMin" min="0" max="30" step="0.5" value="0" title="Início (min)">
-              <span style="font-size:11px;color:var(--muted)">até</span>
-              <input type="number" id="editLinkEndMin" min="0.5" max="30" step="0.5" value="30" title="Fim (min)">
-            </div>
-            <label class="chk-inline">
-              <input type="checkbox" id="editLinkFullIfShorter" checked>
-              Se for menor que o limite, usar o vídeo inteiro
-            </label>
-          </div>
-          <button type="button" class="small" id="step1LoadUrlBtn">▶ Editar com link</button>
-        </div>
-
-        <div class="pre-card" id="cardOptDownload">
-          <h3>⬇ 3. Baixar vídeo (até 30m)</h3>
-          <p>Baixe o vídeo do link no aparelho escolhendo a minutagem (até 30 min) ou inteiro se menor.</p>
-          <input type="url" id="dlLinkUrlInput" placeholder="Link do vídeo / live para baixar...">
-          <div class="range-box">
-            <div style="font-size:11px;font-weight:700;color:#b7dec7;margin-bottom:4px">Minutagem (máx. 30 min)</div>
-            <div class="range-row">
-              <input type="number" id="dlLinkStartMin" min="0" max="30" step="0.5" value="0" title="Início (min)">
-              <span style="font-size:11px;color:var(--muted)">até</span>
-              <input type="number" id="dlLinkEndMin" min="0.5" max="30" step="0.5" value="30" title="Fim (min)">
-            </div>
-            <label class="chk-inline">
-              <input type="checkbox" id="dlLinkFullIfShorter" checked>
-              Se for menor, baixar inteiro
-            </label>
-          </div>
-          <button type="button" class="ghost small" id="downloadSourceVideoBtn">⬇ Baixar vídeo</button>
-        </div>
       </div>
-      <div id="step1UrlStatus" class="link-note" style="margin-top:12px;text-align:left">Escolha entre <b>Envio local</b>, <b>Editar com link / live</b> ou <b>Baixar vídeo (até 30m)</b>.</div>
+      <div id="step1UrlStatus" class="link-note" style="margin-top:12px;text-align:left">Escolha um vídeo do seu aparelho para começar a editar.</div>
     </div>
   </section>
 
@@ -361,7 +323,6 @@ a.dl{display:inline-block;margin-top:10px;background:linear-gradient(135deg,var(
             <div id="tlHead"></div>
             <span id="tlTime">0:00 / 0:00</span>
           </div>
-          <div id="editorSourceStatus" class="link-note"></div>
           <p class="signal" style="margin-top:6px">Clique na barra para navegar. Arraste as caixas de câmera e jogo e a barra divisória.</p>
 
           <label>Modo de tela</label>
@@ -592,14 +553,14 @@ a.dl{display:inline-block;margin-top:10px;background:linear-gradient(135deg,var(
 </main>
 
 <div class="footer">ClipFactory × WaveCombat Hub — <a style="color:var(--acc2)" href="https://youtube.com/@capudooficial7?si=awSkNhuT4YY177Yp" target="_blank" rel="noopener">inscreva-se no canal ↗</a></div>
-<div id="appVersion">v0.031</div>
+<div id="appVersion">v0.034</div>
 
 <script src="https://cdn.jsdelivr.net/npm/ts-ebml@3.0.2/dist/EBML.min.js"></script>
 <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
 <script>
 (function () {
   window.latestUpdateUrl = "./index.html";
-  window.CLIPFACTORY_VERSION = "0.031";
+  window.CLIPFACTORY_VERSION = "0.034";
 })();
 </script>
 <script>
@@ -636,7 +597,7 @@ async function triggerRealUpdate(btnEl, statusFn) {
 
   const target = (window.latestUpdateUrl || "./index.html");
   const sep = target.includes("?") ? "&" : "?";
-  const ver = window.CLIPFACTORY_VERSION || "0.031";
+  const ver = window.CLIPFACTORY_VERSION || "0.034";
   setTimeout(() => {
     window.location.replace(`${target}${sep}v=${ver}&t=${Date.now()}`);
   }, 350);
@@ -646,43 +607,31 @@ async function triggerRealUpdate(btnEl, statusFn) {
 <script src="./app.js"></script>
 <script src="./wallet.js"></script>
 <script>
-"use strict";
-const EDITOR_VERSION = "0.031";
-document.getElementById("appVersion").textContent = "v" + EDITOR_VERSION;
+/* Correção do envio local (v0.030):
+   1) O clique no card usa <label for="fileInput"> — abre o seletor nativo
+      mesmo se qualquer script falhar.
+   2) O input fica visível para o navegador (opacity:0) em vez de display:none,
+      que é o que travava o seletor de arquivos no PWA instalado no Android.
+   3) O upload é vinculado aqui de forma independente e com proteção contra
+      chamada duplicada — funciona mesmo se outra parte do app der erro. */
+(function () {
+  "use strict";
 
-if ("serviceWorker" in navigator) {
-  window.addEventListener("load", () => {
-    navigator.serviceWorker.register("./sw.js").catch(() => {});
-  });
-}
-
-function isNewerVersion(remoteVer, localVer) {
-  if (!remoteVer) return false;
-  const r = String(remoteVer).trim().split(".").map(n => parseInt(n, 10) || 0);
-  const l = String(localVer).trim().split(".").map(n => parseInt(n, 10) || 0);
-  const len = Math.max(r.length, l.length);
-  for (let i = 0; i < len; i++) {
-    if ((r[i] || 0) > (l[i] || 0)) return true;
-    if ((r[i] || 0) < (l[i] || 0)) return false;
-  }
-  return false;
-}
-
-(async function checkEditorUpdate() {
-  if (!navigator.onLine) return;
-  try {
-    const res = await fetch(`./version.json?t=${Date.now()}`, { cache: "no-store" });
-    if (!res.ok) return;
-    const data = await res.json();
-    if (data && data.package_url) { window.__cfPackageUrl = data.package_url; }
-    if (data && isNewerVersion(data.version, EDITOR_VERSION)) {
-      document.getElementById("remoteVerLabel").textContent = `v${data.version}`;
-      document.getElementById("updateBanner").classList.add("show");
+  // Dedup: se o app.js e este script tratarem o mesmo arquivo, só a 1ª vale.
+  const origLoad = (typeof window.loadVideoFile === "function") ? window.loadVideoFile : null;
+  let lastCall = 0;
+  function loadOnce(file) {
+    const now = Date.now();
+    if (now - lastCall < 400) return;
+    lastCall = now;
+    try {
+      if (origLoad) origLoad(file);
+      else if (typeof loadVideoFile === "function") loadVideoFile(file);
+    } catch (err) {
+      console.error("loadVideoFile:", err);
     }
-  } catch (e) {}
-})();
+  }
+  if (origLoad) { window.loadVideoFile = loadOnce; }
 
-document.getElementById("updateBtn").addEventListener("click", () => triggerRealUpdate(document.getElementById("updateBtn"), null));
-</script>
-</body>
-</html>
+  function bindLocalUpload() {
+    const input = document.getElementById("fileInput

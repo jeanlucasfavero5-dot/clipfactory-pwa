@@ -607,31 +607,104 @@ async function triggerRealUpdate(btnEl, statusFn) {
 <script src="./app.js"></script>
 <script src="./wallet.js"></script>
 <script>
-/* Correção do envio local (v0.030):
-   1) O clique no card usa <label for="fileInput"> — abre o seletor nativo
-      mesmo se qualquer script falhar.
-   2) O input fica visível para o navegador (opacity:0) em vez de display:none,
-      que é o que travava o seletor de arquivos no PWA instalado no Android.
-   3) O upload é vinculado aqui de forma independente e com proteção contra
-      chamada duplicada — funciona mesmo se outra parte do app der erro. */
+/* ============================================================
+   ENVIO LOCAL — v0.035
+   Garante que escolher um arquivo leve direto para o editor,
+   mesmo que qualquer outro script do app falhe.
+   (Substitui o bloco v0.030 que estava truncado e não fechava.)
+   ============================================================ */
 (function () {
   "use strict";
 
-  // Dedup: se o app.js e este script tratarem o mesmo arquivo, só a 1ª vale.
-  const origLoad = (typeof window.loadVideoFile === "function") ? window.loadVideoFile : null;
-  let lastCall = 0;
-  function loadOnce(file) {
-    const now = Date.now();
-    if (now - lastCall < 400) return;
-    lastCall = now;
-    try {
-      if (origLoad) origLoad(file);
-      else if (typeof loadVideoFile === "function") loadVideoFile(file);
-    } catch (err) {
-      console.error("loadVideoFile:", err);
-    }
+  let lastFile = null;
+  let lastAt = 0;
+
+  function goToEditor() {
+    const step1 = document.getElementById("step1");
+    const editor = document.getElementById("editor");
+    if (step1) step1.classList.add("hidden");
+    if (editor) editor.classList.remove("hidden");
   }
-  if (origLoad) { window.loadVideoFile = loadOnce; }
+
+  function openPicker() {
+    const input = document.getElementById("fileInput");
+    if (input) input.click();
+  }
+
+  function handleFile(file) {
+    if (!file) return;
+
+    // dedup: o app.js e este script podem reagir ao mesmo arquivo
+    if (file === lastFile && Date.now() - lastAt < 600) return;
+    lastFile = file;
+    lastAt = Date.now();
+
+    // 1) caminho normal: delega para o loadVideoFile do app.js
+    if (typeof window.loadVideoFile === "function") {
+      try {
+        window.loadVideoFile(file);
+      } catch (err) {
+        console.error("loadVideoFile:", err);
+      }
+    }
+
+    // 2) rede de segurança: se o editor não abriu, monta o vídeo aqui mesmo
+    setTimeout(function () {
+      const editor = document.getElementById("editor");
+      if (editor && !editor.classList.contains("hidden")) return;
+
+      const videoEl = document.getElementById("videoEl");
+      if (!videoEl) return;
+      try {
+        videoEl.preload = "auto";
+        videoEl.src = URL.createObjectURL(file);
+        videoEl.load();
+        goToEditor();
+      } catch (err) {
+        console.error("fallback envio local:", err);
+      }
+    }, 120);
+  }
 
   function bindLocalUpload() {
-    const input = document.getElementById("fileInput
+    const input = document.getElementById("fileInput");
+    const drop = document.getElementById("drop");
+
+    if (input && !input.dataset.cfBound) {
+      input.dataset.cfBound = "1";
+      input.addEventListener("change", function (e) {
+        const f = e.target && e.target.files && e.target.files[0];
+        if (f) handleFile(f);
+      });
+    }
+
+    if (drop && !drop.dataset.cfBound) {
+      drop.dataset.cfBound = "1";
+      drop.addEventListener("click", function (e) {
+        // <label for="fileInput"> já abre o seletor nativo; força só se não for LABEL
+        if (drop.tagName !== "LABEL") {
+          e.preventDefault();
+          openPicker();
+        }
+      });
+      drop.addEventListener("dragover", function (e) { e.preventDefault(); });
+      drop.addEventListener("drop", function (e) {
+        e.preventDefault();
+        const f = e.dataTransfer && e.dataTransfer.files && e.dataTransfer.files[0];
+        if (f) handleFile(f);
+      });
+    }
+  }
+
+  window.cfHandleLocalFile = handleFile;
+  window.cfGoToEditor = goToEditor;
+
+  if (document.readyState === "loading") {
+    document.addEventListener("DOMContentLoaded", bindLocalUpload);
+  } else {
+    bindLocalUpload();
+  }
+})();
+</script>
+</body>
+</html>

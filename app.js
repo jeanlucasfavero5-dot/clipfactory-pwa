@@ -2329,16 +2329,13 @@ async function exportVerticalCut(opts = {}) {
 }
 
 window.addEventListener("DOMContentLoaded", () => {
-  initCollapsibleCards();
-  initStyleControls();
-  initCropControls();
-  initTimeline();
-  initCaptions();
-  initSourceAndHookEnhancements();
-  startPreviewLoop();
-
+  // Envio local PRIMEIRO: se qualquer init do editor falhar, o seletor continua funcionando.
   if ($("drop")) {
-    $("drop").onclick = () => $("fileInput").click();
+    // #drop é um <label for="fileInput">: o clique JÁ abre o seletor nativo.
+    // Chamar .click() de novo aqui abria/fechava o seletor duas vezes e cancelava a escolha.
+    if ($("drop").tagName !== "LABEL") {
+      $("drop").onclick = () => $("fileInput").click();
+    }
     $("drop").ondragover = (e) => { e.preventDefault(); };
     $("drop").ondrop = (e) => {
       e.preventDefault();
@@ -2357,8 +2354,24 @@ window.addEventListener("DOMContentLoaded", () => {
   if ($("newVidBtn")) $("newVidBtn").onclick = resetToStep1;
   if ($("analyzeBtn")) $("analyzeBtn").onclick = analyzeMoments;
   if ($("exportBtn")) $("exportBtn").onclick = exportAndDownloadCurrent;
-  setLayoutMode("split");
 
-  const cardObs = new MutationObserver(() => initCollapsibleCards());
-  cardObs.observe(document.body, { childList: true, subtree: true });
+  try { setLayoutMode("split"); } catch (e) { console.error("setLayoutMode:", e); }
+
+  // Inicializações do editor, cada uma isolada: uma falha não derruba o envio local.
+  [
+    initCollapsibleCards,
+    initStyleControls,
+    initCropControls,
+    initTimeline,
+    initCaptions,
+    initSourceAndHookEnhancements,
+    startPreviewLoop
+  ].forEach(fn => {
+    try { fn(); } catch (e) { console.error("init " + (fn && fn.name ? fn.name : "?") + ":", e); }
+  });
+
+  try {
+    const cardObs = new MutationObserver(() => initCollapsibleCards());
+    cardObs.observe(document.body, { childList: true, subtree: true });
+  } catch (e) { console.error("MutationObserver:", e); }
 });

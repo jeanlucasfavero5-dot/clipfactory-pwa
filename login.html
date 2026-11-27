@@ -296,13 +296,13 @@ input:focus{
   </div>
 </div>
 
-<div id="appVersion">v0.031</div>
+<div id="appVersion">v0.034</div>
 
 <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
 <script>
 (function () {
   window.latestUpdateUrl = "./index.html";
-  window.CLIPFACTORY_VERSION = "0.031";
+  window.CLIPFACTORY_VERSION = "0.034";
 })();
 </script>
 <script>
@@ -339,7 +339,7 @@ async function triggerRealUpdate(btnEl, statusFn) {
 
   const target = (window.latestUpdateUrl || "./index.html");
   const sep = target.includes("?") ? "&" : "?";
-  const ver = window.CLIPFACTORY_VERSION || "0.031";
+  const ver = window.CLIPFACTORY_VERSION || "0.034";
   setTimeout(() => {
     window.location.replace(`${target}${sep}v=${ver}&t=${Date.now()}`);
   }, 350);
@@ -348,7 +348,7 @@ async function triggerRealUpdate(btnEl, statusFn) {
 <script>
 "use strict";
 
-const APP_VERSION = "0.031";
+const APP_VERSION = "0.034";
 const SUPABASE_URL = "https://ipqjeacdfiomcxfuixdj.supabase.co";
 const SUPABASE_KEY = "sb_publishable_EWW84q_43YbOvMwB_Rua-A_X465PbLP";
 

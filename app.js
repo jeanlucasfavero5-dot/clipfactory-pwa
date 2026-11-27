@@ -75,13 +75,65 @@ function triggerBlobDownload(url, fileName) {
 }
 
 function getDownloadApiBase() {
+function getDownloadApiBases() {
   const fromUrl = new URLSearchParams(window.location.search).get("api");
-  if (fromUrl) return String(fromUrl).replace(/\/+$/, "");
-  if (typeof window.HUB !== "undefined" && window.HUB.apiBase) {
-    return String(window.HUB.apiBase).replace(/\/+$/, "");
-  }
-  return "https://clipfactory-apibaixar.onrender.com";
+  let stored = null;
+  try { stored = localStorage.getItem("cf_api_base"); } catch (_) {}
+  const fallback = "https://clipfactory-apibaixar.onrender.com";
+  const primary = String(
+    fromUrl || stored || (typeof window.HUB !== "undefined" && window.HUB.apiBase) || fallback
+  ).replace(/\/+$/, "");
+  const bases = [primary];
+  if (!bases.includes(fallback)) bases.push(fallback);
+  return bases;
 }
+
+// Compatibilidade com chamadas existentes
+function getDownloadApiBase() {
+  return getDownloadApiBases()[0];
+}
+
+async function fetchVideoBlobViaApi(targetUrl, rangeCfg) {
+  const params = new URLSearchParams({
+    url: targetUrl,
+    start_sec: String(Math.max(0, Math.round(rangeCfg.startSec || 0))),
+    end_sec: String(Math.max(5, Math.round(rangeCfg.endSec || 1800))),
+    full_if_shorter: rangeCfg.fullIfShorter ? "true" : "false"
+  });
+  // Live do YouTube (ex.: youtube.com/live/...) grava do início da transmissão
+  if (/\/live\//i.test(targetUrl) || /youtube\.com\/live/i.test(targetUrl)) {
+    params.set("live", "true");
+  }
+
+  let lastErr = null;
+  for (const base of getDownloadApiBases()) {
+    const endpoint = `${base}/api/download?${params.toString()}`;
+    try {
+      const resp = await fetch(endpoint, { method: "GET" });
+      if (!resp.ok) {
+        let detail = `Erro HTTP ${resp.status} na API de download.`;
+        try {
+          const errJson = await resp.json();
+          if (errJson && errJson.detail) detail = String(errJson.detail);
+        } catch (_) {}
+        lastErr = new Error(detail);
+        continue;
+      }
+      const blob = await resp.blob();
+      if (!blob || blob.size === 0) {
+        lastErr = new Error("A API retornou um arquivo vazio.");
+        continue;
+      }
+      const disp = resp.headers.get("Content-Disposition") || "";
+      const fileName = parseFilenameFromDisposition(disp, "clipfactory_download.mp4");
+      return { blob, fileName };
+    } catch (e) {
+      lastErr = e;
+    }
+  }
+  throw lastErr || new Error("Nenhuma API de download respondeu.");
+}
+
 
 function parseFilenameFromDisposition(disposition, fallbackName) {
   if (!disposition) return fallbackName;
@@ -644,26 +696,63 @@ function loadVideoFile(file) {
   };
 }
 
-function attachVideoMetadataHandlers(videoEl, labelText) {
-  videoEl.preload = "auto";
-  videoEl.load();
-  const onMetaOrDur = () => {
-    applyLoadedDuration(videoEl);
-    positionBoxes();
-    updateTimeline();
-  };
-  videoEl.onloadedmetadata = onMetaOrDur;
-  videoEl.ondurationchange = onMetaOrDur;
-  videoEl.onloadeddata = onMetaOrDur;
-  videoEl.ontimeupdate = () => {
-    if (!state.duration && videoEl.duration > 0) {
-      applyLoadedDuration(videoEl);
+function getDownloadApiBases() {
+  const fromUrl = new URLSearchParams(window.location.search).get("api");
+  let stored = null;
+  try { stored = localStorage.getItem("cf_api_base"); } catch (_) {}
+  const fallback = "https://clipfactory-apibaixar.onrender.com";
+  const primary = String(
+    fromUrl || stored || (typeof window.HUB !== "undefined" && window.HUB.apiBase) || fallback
+  ).replace(/\/+$/, "");
+  const bases = [primary];
+  if (!bases.includes(fallback)) bases.push(fallback);
+  return bases;
+}
+
+// Compatibilidade com chamadas existentes
+function getDownloadApiBase() {
+  return getDownloadApiBases()[0];
+}
+
+async function fetchVideoBlobViaApi(targetUrl, rangeCfg) {
+  const params = new URLSearchParams({
+    url: targetUrl,
+    start_sec: String(Math.max(0, Math.round(rangeCfg.startSec || 0))),
+    end_sec: String(Math.max(5, Math.round(rangeCfg.endSec || 1800))),
+    full_if_shorter: rangeCfg.fullIfShorter ? "true" : "false"
+  });
+  // Live do YouTube (ex.: youtube.com/live/...) grava do início da transmissão
+  if (/\/live\//i.test(targetUrl) || /youtube\.com\/live/i.test(targetUrl)) {
+    params.set("live", "true");
+  }
+
+  let lastErr = null;
+  for (const base of getDownloadApiBases()) {
+    const endpoint = `${base}/api/download?${params.toString()}`;
+    try {
+      const resp = await fetch(endpoint, { method: "GET" });
+      if (!resp.ok) {
+        let detail = `Erro HTTP ${resp.status} na API de download.`;
+        try {
+          const errJson = await resp.json();
+          if (errJson && errJson.detail) detail = String(errJson.detail);
+        } catch (_) {}
+        lastErr = new Error(detail);
+        continue;
+      }
+      const blob = await resp.blob();
+      if (!blob || blob.size === 0) {
+        lastErr = new Error("A API retornou um arquivo vazio.");
+        continue;
+      }
+      const disp = resp.headers.get("Content-Disposition") || "";
+      const fileName = parseFilenameFromDisposition(disp, "clipfactory_download.mp4");
+      return { blob, fileName };
+    } catch (e) {
+      lastErr = e;
     }
-    updateTimeline();
-  };
-  if ($("step1")) $("step1").classList.add("hidden");
-  if ($("editor")) $("editor").classList.remove("hidden");
-  if ($("exportStatus")) $("exportStatus").textContent = "Vídeo carregado: " + labelText;
+  }
+  throw lastErr || new Error("Nenhuma API de download respondeu.");
 }
 
 function setLinkStatusMessage(msg, mode = "") {
